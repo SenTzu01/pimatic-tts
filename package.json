@@ -1,0 +1,51 @@
+{
+  "name": "pimatic-tts",
+  "description": "Pimatic plugin to perform Text-to-Speech",
+  "author": {
+    "name": "SenTzu01",
+    "url": "https://github.com/SenTzu01"
+  },
+  "main": "tts.coffee",
+  "files": [
+    "tts.coffee",
+    "tts-config-schema.coffee",
+    "LICENSE",
+    "HISTORY.md",
+    "README.md"
+  ],
+  "keywords": [
+    "Pimatic",
+    "tts",
+    "Text-to-Speech",
+    "Text to Speech"
+  ],
+  "version": "0.0.1",
+  "homepage": "https://github.com/SenTzu01/pimatic-tts",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/SenTzu01/pimatic-tts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SenTzu01/pimatic-tts/issues"
+  },
+  "license": "AGPL-3.0",
+  "maintainers": [
+    {
+      "name": "SenTzu01",
+      "url": "https://github.com/SenTzu01"
+    }
+  ],
+  "configSchema": "tts-config-schema.coffee",
+  "dependencies": {
+    "pimatic-plugin-commons": "^0.9.5",
+    "google-tts-api": "^0.0.2",
+    "player": "^0.6.1"
+  },
+  "optionalDependencies": {},
+  "engines": {
+    "node": ">0.8.x",
+    "npm": ">1.1.x"
+  },
+  "readmeFilename": "README.md"
+}
