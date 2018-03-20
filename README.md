@@ -7,10 +7,14 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 - More speech synthesis platforms may be supported in the future
 
 ### Rule syntax and examples: 
+
+## Syntax
 <b>Say "text with $pimatic-variables" using "< languageCode >" speed < n > repeat < n > interval < n ></b>
-using "languageCode" (default: "en-GB") - defines the language to use for the speech synthesis . For supported languages and corresponding codes see: https://cloud.google.com/speech/docs/languages
-speed <int> (default: 40) - defines the speed of the spoken text 
-repeat <int> (default: 1) - defines the number of times the message should be spoken
+
+* using "languageCode"  (default: "en-GB")  - defines the language to use for the speech synthesis . For supported languages and corresponding codes see: https://cloud.google.com/speech/docs/languages
+* speed <int>           (default: 40)       - defines the speed of the spoken text 
+* repeat <int>          (default: 1)        - defines the number of times the message should be spoken
+* interval <int>        (default: 10)       - defines the time in seconds between the voice messages
 
 
 - when trigger: $activity is "wakeup" then Say "Goodmorning everyone! I have set the home for waking up comfortably." using "en-GB" speed 40 repeat 1 interval 0
@@ -45,3 +49,9 @@ Alternatively add it to the Plugin section of your config.json (be sure to stop 
 
 ## Changelog:
 - V0.0.1 - Initial version providing speech synthesis using the Google TTS API
+
+## Roadmap
+- Implement a framework / abstraction layer to easily add different synthesizers and players
+- Implement an offline voice synthesizer next to the existing Google API
+- Implement the ability to deliver speech through network connected devices
+
