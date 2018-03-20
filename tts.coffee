@@ -12,16 +12,14 @@ module.exports = (env) ->
     init: (app, @framework, @config) =>
       @debug = @config.debug || false
       @base = commons.base @, 'Plugin'
-      @queue = []
-      @player = null
       
       @framework.ruleManager.addActionProvider(new TextToSpeechActionProvider(@framework, @config))
     
     playVoiceResource:(resource) =>
-      @player = new Player(resource)
+      player = new Player(resource)
         .on('playend', (item) =>
           return new Promise( (resolve, reject) =>
-            @player = null
+            player = null
             msg = __("%s was played", resource)
             env.logger.debug msg
             resolve msg
@@ -30,7 +28,7 @@ module.exports = (env) ->
 
         .on('error', (error) =>
           return new Promise( (resolve, reject) =>
-            @player = null
+            player = null
             if 'No next song was found' is error
               msg = __("%s was played", resource)
               env.logger.debug msg
@@ -43,8 +41,6 @@ module.exports = (env) ->
         .play()
     
     getVoiceResource: (text, language, speed) =>
-      language ?= @config.language
-      speed ?= @config.speed
       env.logger.debug __("Plugin::toSpeech - text: %s, language: %s, speed: %s", text, language, speed)
       return new Promise( (resolve, reject) =>
         Synthesize(text, language, speed/100).then( (url) =>
@@ -89,14 +85,14 @@ module.exports = (env) ->
         return {
           token: match
           nextInput: input.substring(match.length)
-          actionHandler: new TextToSpeechActionHandler(@framework, text)
+          actionHandler: new TextToSpeechActionHandler(@framework, @config, text)
         }
       else
         return null
         
   class TextToSpeechActionHandler extends env.actions.ActionHandler
   
-    constructor: (@framework, @text) ->
+    constructor: (@framework, @config, @text) ->
       env.logger.debug __("TextToSpeechActionHandler::constructor() - @text.value: %s, @text.language: %s", @text.value, @text.language)
     
     executeAction: (simulate) =>
@@ -111,24 +107,29 @@ module.exports = (env) ->
             env.logger.debug __("TextToSpeechActionHandler - text: %s", text)
             @base.rejectWithErrorString Promise.reject, __("'%s' is %s characters. A maximum of 200 characters is allowed.", text, text.length) if text.length > 200
             
-            Plugin.getVoiceResource(text, @text.language, @text.speed).then( (url) =>
+            language = @text.language ? @config.language
+            delay = @text.interval ? @config.interval
+            speed = @text.speed ? @config.speed
+            reps = @text.repetitions ? @config.repetitions
+            
+            Plugin.getVoiceResource(text, language, speed).then( (url) =>
               repetitions = []
               
               i = 2
               repetitions.push Plugin.playVoiceResource(url)
               interval = setInterval(( =>
-                if i <= @text.repetitions
+                if i <= reps
                   repetitions.push Plugin.playVoiceResource(url)
                 
-                if i >= @text.repetitions
+                if i >= reps
                   clearInterval(interval)
                   Promise.all(repetitions).then( (results) =>
-                    resolve __("'%s' was spoken %s times", text, @text.repetitions)
+                    resolve __("'%s' was spoken %s times", text, reps)
                   ).catch(Promise.AggregateError, (err) =>
-                    @base.rejectWithErrorString Promise.reject, __("'%s' was NOT spoken %s times", text, @text.repetitions)
+                    @base.rejectWithErrorString Promise.reject, __("'%s' was NOT spoken %s times", text, reps)
                   )
                 i++
-              ), @text.interval)
+              ), delay)
             )
           )
         )
