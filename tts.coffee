@@ -4,7 +4,7 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
   M = env.matcher
-  TTS = require('google-tts-api')
+  Synthesize = require('google-tts-api')
   Player = require('player')
   
   class TextToSpeechPlugin extends env.plugins.Plugin
@@ -17,13 +17,13 @@ module.exports = (env) ->
       
       @framework.ruleManager.addActionProvider(new TextToSpeechActionProvider(@framework, @config))
     
-    playVoice:(voice) =>
-      @player = new Player(voice)
+    playVoiceResource:(resource) =>
+      @player = new Player(resource)
         .on('playend', (item) =>
           return new Promise( (resolve, reject) =>
             @player = null
-            msg = __("%s was played", voice)
-            env.logger.debug __("Plugin::playVoice::player.on.playend - %s", msg)
+            msg = __("%s was played", resource)
+            env.logger.debug msg
             resolve msg
           )
         )
@@ -32,23 +32,25 @@ module.exports = (env) ->
           return new Promise( (resolve, reject) =>
             @player = null
             if 'No next song was found' is error
-              msg = __("%s was played", voice)
-              env.logger.debug __("Plugin::playVoice::player.on.error - %s", msg)
+              msg = __("%s was played", resource)
+              env.logger.debug msg
               resolve msg
             else
+              env.logger.error error
               reject error
           )
         )
         .play()
     
-    toSpeech: (text, language, speed) =>
+    getVoiceResource: (text, language, speed) =>
       language ?= @config.language
       speed ?= @config.speed
       env.logger.debug __("Plugin::toSpeech - text: %s, language: %s, speed: %s", text, language, speed)
       return new Promise( (resolve, reject) =>
-        TTS(text, language, speed/100).then( (url) =>
+        Synthesize(text, language, speed/100).then( (url) =>
           resolve url
         ).catch( (err) =>
+          env.logger.error err
           reject err
         )
       )
@@ -102,18 +104,23 @@ module.exports = (env) ->
       if simulate
         # just return a promise fulfilled with a description about what we would do.
         return __("would convert Text to Speech: \"%s\"", @text.value)
+      
       else
         return new Promise( (resolve, reject) =>
           @framework.variableManager.evaluateStringExpression(@text.value).then( (text) =>
-            env.logger.debug __("TextToSpeechActionHandler::@framework.variableManager.evaluateStringExpression: - string: %s, @text.language: %s, speed: %s, repeat: %s, delay: %s", text, @text.language, @text.speed, @text.repetitions, @text.interval)
-            Plugin.toSpeech(text, @text.language, @text.speed).then( (url) =>
+            env.logger.debug __("TextToSpeechActionHandler - text: %s", text)
+            @base.rejectWithErrorString Promise.reject, __("'%s' is %s characters. A maximum of 200 characters is allowed.", text, text.length) if text.length > 200
+            
+            Plugin.getVoiceResource(text, @text.language, @text.speed).then( (url) =>
               repetitions = []
+              
               i = 2
-              repetitions.push Plugin.playVoice(url, @text.language, @text.speed)
+              repetitions.push Plugin.playVoiceResource(url)
               interval = setInterval(( =>
                 if i <= @text.repetitions
-                  repetitions.push Plugin.playVoice(url, @text.language, @text.speed)
-                else
+                  repetitions.push Plugin.playVoiceResource(url)
+                
+                if i >= @text.repetitions
                   clearInterval(interval)
                   Promise.all(repetitions).then( (results) =>
                     resolve __("'%s' was spoken %s times", text, @text.repetitions)
