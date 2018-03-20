@@ -43,12 +43,12 @@ module.exports = (env) ->
           return Promise.reject error
       )
         
-    # Entry point for ActionHandler  
+    
     toSpeech: (text, language, speed) =>
       language ?= @config.language
       speed ?= @config.speed
-      env.logger.debug __("Plugin::toSpeech - text: %s, language: %s, speed: %s", text, language, @config.speed)
-      TTS(text, language, @config.speed/100).then( (url) =>
+      env.logger.debug __("Plugin::toSpeech - text: %s, language: %s, speed: %s", text, language, speed)
+      TTS(text, language, speed/100).then( (url) =>
         @queue.push url
         if @player?
           env.logger.debug __("Plugin::toSpeech - @player: %s", @player?)
@@ -108,17 +108,24 @@ module.exports = (env) ->
     textToSpeech: (text, lang, speed) =>
       if text.length > 200
         env.logger.debug __("'%s' is more than 200 characters", text)
-        @results.push Plugin.toSpeech(text.split(0, 200), lang)
+        @results.push Plugin.toSpeech(text.split(0, 200), lang, speed)
         @textToSpeech(text.split(n+201))
       else
         env.logger.debug __("'%s' is less than than 200 characters", text)
-        @results.push Plugin.toSpeech(text, lang)
+        @results.push Plugin.toSpeech(text, lang, speed)
       return @results
     
-    repeatMessage: (text, lang, speed, reps) =>
+    repeatMessage: (text, lang, speed, reps, delay) =>
       repetitions = []
-      for i in [1..reps]
-        repetitions.push @textToSpeech(text, lang, speed)
+      i = 1
+      interval = setInterval(( =>
+        if i <= reps
+          repetitions.push @textToSpeech(text, lang, speed)
+        else
+          clearInterval(interval)
+        i++
+      ), delay)
+      
       Promise.all(repetitions).then( (results) =>
         return Promise.resolve __("'%s' was spoken using %s", text, @text.language)
       ).catch(Promise.AggregateError, (err) =>
@@ -132,9 +139,9 @@ module.exports = (env) ->
         return __("would convert Text to Speech: \"%s\"", @text.value)
       else
         @results = []
-        return @framework.variableManager.evaluateStringExpression(@text.value).then( (text) =>
-          env.logger.debug __("TextToSpeechActionHandler::@framework.variableManager.evaluateStringExpression: - string: %s, @text.language: %s", text, @text.language)
-          return @repeatMessage(text, @text.language, @text.speed, @text.repetitions)
+        @framework.variableManager.evaluateStringExpression(@text.value).then( (text) =>
+          env.logger.debug __("TextToSpeechActionHandler::@framework.variableManager.evaluateStringExpression: - string: %s, @text.language: %s, speed: %s, repeat: %s, delay: %s", text, @text.language, @text.speed, @text.repetitions, @text.delay)
+          return @repeatMessage(text, @text.language, @text.speed, @text.repetitions, @text.delay)
         )
   Plugin = new TextToSpeechPlugin
   return Plugin
