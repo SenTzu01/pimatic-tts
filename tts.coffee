@@ -15,8 +15,11 @@ module.exports = (env) ->
       
       @framework.ruleManager.addActionProvider(new TextToSpeechActionProvider(@framework, @config))
     
-    playVoiceResource:(resource) =>
+    playVoiceResource:(resource, volume) =>
       player = new Player(resource)
+        .on('playing', (item) =>
+          player.setVolume(volume)
+        )
         .on('playend', (item) =>
           return new Promise( (resolve, reject) =>
             player = null
@@ -25,7 +28,6 @@ module.exports = (env) ->
             resolve msg
           )
         )
-
         .on('error', (error) =>
           return new Promise( (resolve, reject) =>
             player = null
@@ -38,7 +40,8 @@ module.exports = (env) ->
               reject error
           )
         )
-        .play()
+      player.play()
+        
     
     getVoiceResource: (text, language, speed) =>
       env.logger.debug __("Plugin::toSpeech - text: %s, language: %s, speed: %s", text, language, speed)
@@ -111,16 +114,16 @@ module.exports = (env) ->
             delay = @text.interval ? @config.interval
             speed = @text.speed ? @config.speed
             reps = @text.repetitions ? @config.repetitions
+            volume = @config.volume/100
             
             Plugin.getVoiceResource(text, language, speed).then( (url) =>
               repetitions = []
               
+              repetitions.push Plugin.playVoiceResource(url, volume.toPrecision(1))
               i = 2
-              repetitions.push Plugin.playVoiceResource(url)
               interval = setInterval(( =>
                 if i <= reps
-                  repetitions.push Plugin.playVoiceResource(url)
-                
+                  repetitions.push Plugin.playVoiceResource(url, volume.toPrecision(1))
                 if i >= reps
                   clearInterval(interval)
                   Promise.all(repetitions).then( (results) =>

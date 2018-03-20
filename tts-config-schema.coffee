@@ -23,4 +23,8 @@ module.exports = {
       description: "Number of times the same message is repeated"
       type: "number"
       default: 1
+    volume:
+      description: "Audio volume"
+      type: "number"
+      default: 40
 }
