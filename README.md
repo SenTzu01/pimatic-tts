@@ -9,9 +9,9 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 ### Rule syntax and examples: 
 
 ## Syntax
-<b>Say "text with $pimatic-variables" using "< languageCode >" speed < n > repeat < n > interval < n ></b>
+<b>Say "text with $pimatic-variables" using <languageCode> speed <n> repeat <n> interval <n></b>
 
-* using "languageCode"  (default: "en-GB")  - defines the language to use for the speech synthesis . For supported languages and corresponding codes see: https://cloud.google.com/speech/docs/languages
+* using <languageCode>  (default: "en-GB")  - defines the language to use for the speech synthesis . For supported languages and corresponding codes see: https://cloud.google.com/speech/docs/languages
 * speed <int>           (default: 40)       - defines the speed of the spoken text 
 * repeat <int>          (default: 1)        - defines the number of times the message should be spoken
 * interval <int>        (default: 10)       - defines the time in seconds between the voice messages
