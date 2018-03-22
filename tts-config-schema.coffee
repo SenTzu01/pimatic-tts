@@ -7,6 +7,10 @@ module.exports = {
       description: "Debug mode. Writes debug messages to the pimatic log, if set to true."
       type: "boolean"
       default: false
+    download:
+      description: "Directory to store downloaded voice resources"
+      type: "string"
+      default: "/var/tmp"
     language:
       description: "Language used for Speech"
       type: "string"

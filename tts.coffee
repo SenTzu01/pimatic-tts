@@ -16,7 +16,7 @@ module.exports = (env) ->
       @framework.ruleManager.addActionProvider(new TextToSpeechActionProvider(@framework, @config))
     
     playVoiceResource:(resource, volume) =>
-      player = new Player(resource)
+      player = new Player(resource, {downloads: '/var/tmp'})
         .on('playing', (item) =>
           player.setVolume(volume)
         )
@@ -60,15 +60,15 @@ module.exports = (env) ->
       
     parseAction: (input, context) =>
       retVal = null
-      text = {value: null, language: null, speed: null, repetitions: 1, delay: null}
+      text = {value: null, language: null, speed: null, repetitions: 1, delay: null, volume: 50}
       fullMatch = no
 
       setString = (m, tokens) => text.value = tokens
+      setLanguage = (m, tokens) => text.language = tokens
       setSpeed = (m, tokens) => text.speed = tokens
       setRepetitions = (m, tokens) => text.repetitions = tokens
       setIntervalTime = (m, tokens) => text.interval = tokens*1000
-      setLanguage = (m, tokens) => text.language = tokens
-      onEnd = => fullMatch = yes
+      setVolume = (m, tokens) => text.volume = tokens/100
       
       m = M(input, context)
         .match("Say ")
@@ -81,6 +81,8 @@ module.exports = (env) ->
         .matchNumber(setRepetitions)
         .match(" interval ")
         .matchNumber(setIntervalTime)
+        .match(" volume ")
+        .matchNumber(setVolume)
         
 
       if m.hadMatch()
@@ -114,7 +116,7 @@ module.exports = (env) ->
             delay = @text.interval ? @config.interval
             speed = @text.speed ? @config.speed
             reps = @text.repetitions ? @config.repetitions
-            volume = @config.volume/100
+            volume = @text.volume ? @config.volume/100
             
             Plugin.getVoiceResource(text, language, speed).then( (url) =>
               repetitions = []
