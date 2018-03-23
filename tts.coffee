@@ -4,8 +4,8 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
   M = env.matcher
-  Synthesize = require('google-tts-api')
-  Player = require('player')
+  #Synthesize = require('google-tts-api')
+  #Player = require('player')
   
   class TextToSpeechPlugin extends env.plugins.Plugin
     
@@ -16,42 +16,18 @@ module.exports = (env) ->
       @framework.ruleManager.addActionProvider(new TextToSpeechActionProvider(@framework, @config))
     
     playVoiceResource:(resource, volume) =>
-      player = new Player(resource, {downloads: '/var/tmp'})
-        .on('playing', (item) =>
-          player.setVolume(volume)
-        )
-        .on('playend', (item) =>
-          return new Promise( (resolve, reject) =>
-            player = null
-            msg = __("%s was played", resource)
-            env.logger.debug msg
-            resolve msg
-          )
-        )
-        .on('error', (error) =>
-          return new Promise( (resolve, reject) =>
-            player = null
-            if 'No next song was found' is error
-              msg = __("%s was played", resource)
-              env.logger.debug msg
-              resolve msg
-            else
-              env.logger.error error
-              reject error
-          )
-        )
-      player.play()
-        
+      return new Promise( (resolve, reject) =>
+        msg = __("Stub: Sound %s was played with volume %s", resource, volume)
+        env.logger.debug msg
+        resolve msg
+      )
     
     getVoiceResource: (text, language, speed) =>
       env.logger.debug __("Plugin::toSpeech - text: %s, language: %s, speed: %s", text, language, speed)
       return new Promise( (resolve, reject) =>
-        Synthesize(text, language, speed/100).then( (url) =>
-          resolve url
-        ).catch( (err) =>
-          env.logger.error err
-          reject err
-        )
+        msg = __("Stub: Synthesized %s using language: %s and speed: %s", text, language, speed)
+        env.logger.debug msg
+        resolve msg
       )
       
   class TextToSpeechActionProvider extends env.actions.ActionProvider
