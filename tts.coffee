@@ -2,6 +2,7 @@ TTSProviders =
   'Google':
     device: 'GoogleTTSDevice'
     deviceDef: 'google-device-config-schema'
+    langResource: 'google-tts-api-lang.json'
     actionProvider: 'GoogleTTSActionProvider'
   
 module.exports = (env) ->
@@ -28,6 +29,17 @@ module.exports = (env) ->
           
           @base.debug "Registering device class #{TTSProvider.device}"
           deviceConfig = require("./" + TTSProvider.deviceDef)
+          if TTSProvider.langResource?
+            console.log("JAAAA")
+            languages = require('./resources/'+ TTSProvider.langResource)
+            console.log(languages)
+            for own obj of languages
+              do (obj) =>
+                console.log(obj)
+                language = languages[obj]
+                console.log(language)
+                if 0 > deviceConfig[TTSProvider.device].properties.language.enum.indexOf(language.code)
+                  deviceConfig[TTSProvider.device].properties.language.enum.push language.code
           deviceClass = require('./devices/' + TTSProvider.device)(env)
           params = {configDef: deviceConfig[TTSProvider.device], createCallback: (config, lastState) => return new deviceClass(config, lastState)}
           

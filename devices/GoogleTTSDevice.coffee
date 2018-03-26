@@ -8,8 +8,12 @@ module.exports = (env) ->
   class GoogleTTSDevice extends TTSDevice
     
     constructor: (@config, lastState) ->
+      @_language = @config.language ? null
+      @_speed = @config.speed ? null
+      @_volume = @config.volume ? null
+      
       super(@config, lastState)
-    
+      
     createSpeechResource: (text, language, speed) =>
       language ?= @_language
       speed ?= @_speed

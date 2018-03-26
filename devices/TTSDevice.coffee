@@ -49,11 +49,8 @@ module.exports = (env) ->
       @id = @config.id
       @name = @config.name
       
-      @_language = @config.language
-      @_speed = @config.speed
-      @_volume = @config.volume
-      @_iterations = @config.repeat
-      @_interval = @config.interval
+      @_iterations = @config.repeat ? null
+      @_interval = @config.interval ? null 
       @_latestText = lastState?.resource?.value or ''
       @_latestResource = lastState?.resource?.value or ''
       

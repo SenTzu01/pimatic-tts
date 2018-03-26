@@ -7,8 +7,9 @@ module.exports = {
       language:
         description: "Language used for Speech"
         type: "string"
-        default: "en-GB"
+        enum: []
         required: false
+        default: "en-GB"
       speed:
         description: "Speed for speech, value between 0-100"
         type: "number"
