@@ -27,7 +27,8 @@ module.exports = (env) ->
           commons.base.rejectWithErrorString Promise.reject, __("Error obtaining TTS resource: %s", error)
         )
       )
-      
+    
+    #testing audio output
     outputSpeech:(resource, volume) =>
       volume ?= @_volume
       
