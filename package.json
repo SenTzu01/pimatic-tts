@@ -39,7 +39,8 @@
   "configSchema": "tts-config-schema.coffee",
   "dependencies": {
     "pimatic-plugin-commons": "^0.9.5",
-    "google-tts-api": "^0.0.2"
+    "google-tts-api": "^0.0.2",
+    "player": "^0.6.1"
   },
   "optionalDependencies": {},
   "engines": {

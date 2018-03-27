@@ -3,6 +3,7 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   TTSDevice = require("./TTSDevice")(env)
   GoogleAPI = require('google-tts-api')
+  Player = require('player')
   
   class GoogleTTSDevice extends TTSDevice
     
@@ -31,9 +32,33 @@ module.exports = (env) ->
       volume ?= @_volume
       
       return new Promise( (resolve, reject) =>
-        result = __("Stub: %s - AUDIO OUTPUT - %s with volume %s", @config.id, resource, (volume/100).toPrecision(1))
-        env.logger.debug result
-        resolve true
+        player = new Player(resource, {downloads: '/var/tmp'})
+          .on('playing', (item) =>
+            player.setVolume(volume)
+          )
+          .on('playend', (item) =>
+            return new Promise( (resolve, reject) =>
+              player = null
+              msg = __("%s was played", resource)
+              env.logger.debug msg
+              resolve msg
+            )
+          )
+          .on('error', (error) =>
+            return new Promise( (resolve, reject) =>
+              player = null
+              if 'No next song was found' is error
+                msg = __("%s was played", resource)
+                env.logger.debug msg
+                resolve msg
+              else
+                env.logger.error error
+                reject error
+          )
+        )
+      player.play()
+        
+        
       ).catch( (error) =>
         commons.base.rejectWithErrorString Promise.reject, __("%s - Audio output error. Reason: %s", @config.id, error)
       )
@@ -42,3 +67,6 @@ module.exports = (env) ->
       super()
   
   return GoogleTTSDevice
+  
+  
+        
