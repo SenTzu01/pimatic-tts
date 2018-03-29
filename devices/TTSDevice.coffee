@@ -51,8 +51,8 @@ module.exports = (env) ->
       @name = @config.name
       @_options = {
         language: @config.language ? 'en-GB'
-        speed: @config.speed ? 1
-        volume: @config.volume ? 1
+        speed: @config.speed ? 100
+        volume: @config.volume ? 40
         iterations: @config.repeat ? 1
         interval: @config.interval ? 0
       }
@@ -67,6 +67,7 @@ module.exports = (env) ->
       
     convertToSpeech: (text) =>
       reject __("%s - text: '%s', tts text provided is null or undefined.", @config.id, text) unless text?
+      
       return new Promise( (resolve, reject) =>
         @createSpeechResource(text).then( (resource) =>
           @_setLatestText(text)
@@ -75,22 +76,27 @@ module.exports = (env) ->
           i = 0
           results = []
           playback = =>
-            # Playback resource
+
             @outputSpeech(resource).then( (result) =>
               results.push result
               i++
               
               if i < @_options.iterations
                 setTimeout(playback, @_options.interval*1000)
+              
               else
+                @emit('state', false)
                 Promise.all(results).then( (result) =>
                   resolve __("'%s' was spoken %s times", text, @_options.iterations)
                 ).catch(Promise.AggregateError, (error) =>
                   reject __("'%s' was NOT spoken %s times. Error: %s", text, @_options.iterations, error)
                 )
             ).catch( (error) =>
+              @emit('state', false)
               reject error
             )
+          
+          @emit('state', true)
           playback()
           
         ).catch( (error) =>
@@ -119,6 +125,8 @@ module.exports = (env) ->
       @emit 'latestResource', value
     
     destroy: () ->
+      @removeAllListeners('active')
+      
       super()
 
   return TTSDevice

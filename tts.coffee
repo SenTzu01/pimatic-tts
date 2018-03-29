@@ -39,6 +39,6 @@ module.exports = (env) ->
           params = {configDef: deviceConfig[TTSProvider.device], createCallback: (config, lastState) => return new deviceClass(config, lastState)}
           
           @framework.deviceManager.registerDeviceClass(TTSProvider.device, params)
-  
+         
   Plugin = new TextToSpeechPlugin
   return Plugin

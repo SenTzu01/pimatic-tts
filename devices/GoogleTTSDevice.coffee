@@ -3,8 +3,9 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   TTSDevice = require("./TTSDevice")(env)
   GoogleAPI = require('google-tts-api')
-  request = require('request')
-  lame = require('lame')
+  Request = require('request')
+  Lame = require('lame')
+  Volume = require('pcm-volume')
   Speaker = require('speaker')
   
   class GoogleTTSDevice extends TTSDevice
@@ -23,29 +24,59 @@ module.exports = (env) ->
         )
       )
     
+    setVolume: (value) ->
+      if value is @_options.volume then return
+      @_options.volume = value
+      @emit('volume', value)
+      
+    _pcmVolume: (value) ->
+      volMaxRel = 100
+      volMaxAbs = 150
+      return (value/volMaxRel*volMaxAbs/volMaxRel).toPrecision(2)
+      
     #testing audio output
     outputSpeech:(resource) =>
       
       return new Promise( (resolve, reject) =>
-        env.logger.debug __("Would play:  %s, volume: %s", resource, (@_options.volume/100).toPrecision(1))
         format = {}
-        request
+        pcmDecoder = new Lame.Decoder()
+        volControl = new Volume(@_pcmVolume(@_options.volume))
+        
+        env.logger.debug @_options
+        
+        Request
           .get(resource)
           .on('error', (error) =>
             env.logger.debug error
+            reject error
           )
-          .pipe(new lame.Decoder())
-          .on('format', (format) =>
-            console.log(format)
+          .pipe(pcmDecoder)
+        
+        pcmDecoder.pipe(volControl)
+        
+        pcmDecoder.on('format', (format) =>
+          env.logger.debug format
+          
+          speaker = new Speaker(format)
+          
+          volControl.pipe(speaker)
+          volControl.setVolume(@_pcmVolume(@_options.volume))
+          
+          speaker.on('open', () =>
+            env.logger.debug __("playback started")
           )
-          .pipe(new Speaker(format))
-          .on('error', (err) =>
-              env.logger.debug err
+          
+          speaker.on('error', (error) =>
+              env.logger.debug error
+              reject error
           )
-          .on('finish', () =>
-            console.log("finished playback")
+          
+          speaker.on('finish', () =>
+            @_volControl = null
+            env.logger.debug __("finished playback")
+            resolve __("Text-to-Speech: '%s' outputted.", @_latestText)
           )
-        resolve true
+        )
       )
       
     destroy: () ->
