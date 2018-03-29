@@ -35,7 +35,7 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 - lame
 
 Raspbian / Debian example to install prerequisites:
-````sudo apt-get install alsa-utils mpg321 lame libasound2-dev````
+````sudo apt-get install alsa-utils mpg123 lame libasound2-dev````
 
 ### Installation
 - Install Pimatic-tts via the Pimatic frontend (preferred), activate the plugin and restart Pimatic
