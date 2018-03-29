@@ -4,6 +4,8 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 ## Features
 - Provides a rule action allowing Pimatic to speak text over connected speakers
 - Currently supports the cloud based Google TTS API
+- Device approach holding the config allows for shorter action definitions, as most config will always be the same. You can configure several devices each holding a different output config. 
+- Device approach also allows for greater flexibility from a development perspective
 - Plugin has been created to easily plugin other TTS platforms in future, as well as audio output devices
 - Audio output to connected audio devices is achieved by streaming PCM audio to the ALSA backend on Debian/Ubuntu
 
@@ -17,7 +19,7 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 ### Example
 - when trigger: $activity is "wakeup" then Say "Goodmorning everyone! I have set the home for waking up comfortably." using google-tts-device
 
-## Text-to-Speech Device configuration options:
+## TTS Device configuration options:
 * language <enum>       (default: en-GB)    - For supported languages and corresponding codes see: https://cloud.google.com/speech/docs/languages
 * speed <0-100>         (default: 40)       - Velocity of the TTS voice 
 * volume <0-100>        (default: 50)       - Sets gain volume for audio output of the TTS voice
