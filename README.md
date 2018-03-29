@@ -10,9 +10,9 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 ## Rule syntax and examples: 
 
 ### Syntax
-<b>Say "text with $pimatic-variables" using <TTSDevice></b>
+<b>Say "text with $pimatic-variables" using TTSDevice </b>
 
-* <TTSDevice> - determines the Text-to-Speech device to use for speech synthesis. 
+* TTSDevice - determines the Text-to-Speech device to use for speech synthesis. 
 
 ### Example
 - when trigger: $activity is "wakeup" then Say "Goodmorning everyone! I have set the home for waking up comfortably." using google-tts-device
