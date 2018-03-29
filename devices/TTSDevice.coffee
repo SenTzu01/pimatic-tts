@@ -17,11 +17,6 @@ module.exports = (env) ->
         type: t.string
         acronym: 'Voice Speed:'
         discrete: true
-      latestResource:
-        description: "Audio resource with synthesized text"
-        type: t.string
-        acronym: 'Audio resource:'
-        discrete: true
     
     actions:
       getLanguage:
@@ -33,11 +28,6 @@ module.exports = (env) ->
         description: "Returns the Voice speed"
         returns:
           speed:
-            type: t.string
-      getLatestResource:
-        description: "Returns the synthesized audio resource"
-        returns:
-          resource:
             type: t.string
     
     createSpeechResource: () ->
@@ -110,7 +100,6 @@ module.exports = (env) ->
     getRepeat: -> Promise.resolve(@config.repeat)
     getInterval: -> Promise.resolve(@config.interval)
     getLatestText: -> Promise.resolve(@_latestText)
-    getLatestResource: -> Promise.resolve(@_latestResource)
     
     _setLatestText: (value) ->
       if @_latestText is value then return
