@@ -7,28 +7,4 @@ module.exports = {
       description: "Debug mode. Writes debug messages to the pimatic log, if set to true."
       type: "boolean"
       default: false
-    download:
-      description: "Directory to store downloaded voice resources"
-      type: "string"
-      default: "/var/tmp"
-    language:
-      description: "Language used for Speech"
-      type: "string"
-      default: "en-GB"
-    speed:
-      description: "Speed for speech, value between 0-100"
-      type: "number"
-      default: 40
-    interval:
-      description: "time between repeats of the same message in seconds"
-      type: "number"
-      default: 10
-    repetitions:
-      description: "Number of times the same message is repeated"
-      type: "number"
-      default: 1
-    volume:
-      description: "Audio volume"
-      type: "number"
-      default: 40
 }
