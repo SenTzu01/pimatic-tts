@@ -27,7 +27,8 @@ module.exports = (env) ->
         (device) => device.config.class is @_ttsProvider.deviceClass
       ).value()
       
-      setDevice = (m, d) => ttsInput.device = d
+      setDevice = (m, d) =>
+        ttsInput.device = d
       setText = (m, input) => ttsInput.text = input
       setLanguage = (m, input) => ttsInput.language = input
       setSpeed = (m, input) => ttsInput.speed = input

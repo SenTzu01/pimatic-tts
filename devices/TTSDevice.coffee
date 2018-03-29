@@ -76,11 +76,11 @@ module.exports = (env) ->
           i = 0
           results = []
           playback = =>
-
+            env.logger.debug __("Starting audio output for iteration: %s", i+1)
             @outputSpeech(resource).then( (result) =>
               results.push result
+              env.logger.debug __("Finished audio output for iteration: %s", i+1)
               i++
-              
               if i < @_options.iterations
                 setTimeout(playback, @_options.interval*1000)
               
@@ -113,13 +113,11 @@ module.exports = (env) ->
     getLatestResource: -> Promise.resolve(@_latestResource)
     
     _setLatestText: (value) ->
-      env.logger.debug __("text: %s", value)
       if @_latestText is value then return
       @_latestText = value
       @emit 'latestText', value
       
     _setLatestResource: (value) ->
-      env.logger.debug __("TTS resource: %s", value)
       if @_latestResource is value then return
       @_latestResource = value
       @emit 'latestResource', value

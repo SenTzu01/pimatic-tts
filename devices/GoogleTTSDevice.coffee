@@ -14,7 +14,7 @@ module.exports = (env) ->
       super(@config, lastState)
       
     createSpeechResource: (text) =>
-      env.logger.debug __("%s - text: %s, language: %s, speed: %s", @config.id, text, @_options.language, @_options.speed)
+      env.logger.debug __("TTS: Getting TTS Resource for text: %s, language: %s, speed: %s", text, @_options.language, @_options.speed)
       
       return new Promise( (resolve, reject) =>
         GoogleAPI(text, @_options.language, @_options.speed/100).then( (url) =>
@@ -34,7 +34,6 @@ module.exports = (env) ->
       volMaxAbs = 150
       return (value/volMaxRel*volMaxAbs/volMaxRel).toPrecision(2)
       
-    #testing audio output
     outputSpeech:(resource) =>
       
       return new Promise( (resolve, reject) =>
@@ -42,13 +41,12 @@ module.exports = (env) ->
         pcmDecoder = new Lame.Decoder()
         volControl = new Volume(@_pcmVolume(@_options.volume))
         
-        env.logger.debug @_options
-        
         Request
           .get(resource)
           .on('error', (error) =>
-            env.logger.debug error
-            reject error
+            msg = __("TTS: Failure reading audio resource '%s'. Error: %s", resource, error)
+            env.logger.debug msg
+            reject msg
           )
           .pipe(pcmDecoder)
         
@@ -60,21 +58,27 @@ module.exports = (env) ->
           speaker = new Speaker(format)
           
           volControl.pipe(speaker)
-          volControl.setVolume(@_pcmVolume(@_options.volume))
+          ### TEST
+          setTimeout(( =>
+            env.logger.debug __("setting volume to: %s", @_pcmVolume(@_options.volume-70))
+            volControl.setVolume(@_pcmVolume(@_options.volume-70))
+          ), 1000)
+          ###
           
           speaker.on('open', () =>
-            env.logger.debug __("playback started")
+            env.logger.debug __("TTS: Audio output of '%s' started.", @_latestText)
           )
           
           speaker.on('error', (error) =>
-              env.logger.debug error
-              reject error
+            msg = __("TTS: Audio output of '%s' failed. Error: %s", @_latestText, error)
+            env.logger.debug msg
+            reject msg
           )
           
           speaker.on('finish', () =>
-            @_volControl = null
-            env.logger.debug __("finished playback")
-            resolve __("Text-to-Speech: '%s' outputted.", @_latestText)
+            msg = __("TTS: Audio output of '%s' completed successfully.", @_latestText)
+            env.logger.debug msg
+            resolve msg
           )
         )
       )
