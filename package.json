@@ -40,7 +40,9 @@
   "dependencies": {
     "pimatic-plugin-commons": "^0.9.5",
     "google-tts-api": "^0.0.2",
-    "player": "^0.6.1"
+    "request": "^2.85.0",
+    "lame": "^1.1.2",
+    "speaker": "^0.4.0"
   },
   "optionalDependencies": {},
   "engines": {

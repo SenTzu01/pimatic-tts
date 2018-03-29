@@ -4,7 +4,7 @@ module.exports = (env) ->
   _ = env.require 'lodash'
   t = env.require('decl-api').types
   commons = require('pimatic-plugin-commons')(env)
-
+  
   class TTSDevice extends env.devices.Device
     attributes:
       language:
@@ -49,77 +49,55 @@ module.exports = (env) ->
     constructor: (@config, lastState) ->
       @id = @config.id
       @name = @config.name
+      @_options = {
+        language: @config.language ? 'en-GB'
+        speed: @config.speed ? 1
+        volume: @config.volume ? 1
+        iterations: @config.repeat ? 1
+        interval: @config.interval ? 0
+      }
       
-      @_iterations = @config.repeat ? null
-      @_interval = @config.interval ? null 
-      @_latestText = lastState?.resource?.value or ''
-      @_latestResource = lastState?.resource?.value or ''
+      @_latestText = null
+      @_latestResource = null
       
       @_repetitions = []
       @base = commons.base @, 'Plugin'
       
       super()
       
-    convertToSpeech: (text, language, speed, volume, iterations, interval) =>
+    convertToSpeech: (text) =>
+      reject __("%s - text: '%s', tts text provided is null or undefined.", @config.id, text) unless text?
       return new Promise( (resolve, reject) =>
-        commons.base.rejectWithErrorString Promise.reject, __("%s - text: '%s', tts text provided is null or undefined.", @config.id, text) unless text?
-        @_setLatestText(text)
-        @createSpeechResource(text, language, speed).then( (resource) =>
+        @createSpeechResource(text).then( (resource) =>
+          @_setLatestText(text)
           @_setLatestResource(resource)
-          @repeatOutput(resource, iterations, interval, volume).then( (result) =>
-            resolve result
-          )
-        )
-      )
-      
-    repeatOutput: (resource, iterations, interval, volume) =>
-      iterations ?= @_iterations
-      interval ?= @_interval
-      i = 1
-      
-      return new Promise( (resolve, reject) =>
-        
-        output = (resource, volume) => @outputSpeech(resource, volume).then( (result) => 
-          @_addToSpeechOutResults(result)
-          i++
-        )
-        output(resource, volume)
-        
-        stop = (interval) =>
-          return new Promise( (resolve, reject) =>
-            @_processOutput().then( (result) =>
-              clearInterval(repeat)
-              repeat = null
-              @_clearSpeechOutResults()
-              resolve result
-            )
-          )
           
-        repeat = setInterval(( =>
-          output(resource, volume) if i <= iterations
-          
-          if i >= iterations
-            return stop(interval).then( (result) =>
-              resolve result
+          i = 0
+          results = []
+          playback = =>
+            # Playback resource
+            @outputSpeech(resource).then( (result) =>
+              results.push result
+              i++
+              
+              if i < @_options.iterations
+                setTimeout(playback, @_options.interval*1000)
+              else
+                Promise.all(results).then( (result) =>
+                  resolve __("'%s' was spoken %s times", text, @_options.iterations)
+                ).catch(Promise.AggregateError, (error) =>
+                  reject __("'%s' was NOT spoken %s times. Error: %s", text, @_options.iterations, error)
+                )
+            ).catch( (error) =>
+              reject error
             )
-        ), interval*1000)
-      )
-    
-    _addToSpeechOutResults: (value) ->
-      @_repetitions.push value
-      
-    _clearSpeechOutResults: () ->
-      @_repetitions = []
-      
-    _processOutput: () =>
-      return new Promise( (resolve, reject) =>
-        Promise.all(@_repetitions).then( (results) =>
-          resolve __("'%s' was spoken %s times", @_latestText, @_iterations)
-        ).catch(Promise.AggregateError, (err) =>
-          @base.rejectWithErrorString Promise.reject, __("'%s' was NOT spoken %s times", @_latestText, @_iterations)
+          playback()
+          
+        ).catch( (error) =>
+          reject __("Error while converting '%s' to speech: %s", text, error)
         )
       )
-    
+      
     getLanguage: -> Promise.resolve(@config.language)
     getSpeed: -> Promise.resolve(@config.speed)
     getVolume: -> Promise.resolve(@config.volume)

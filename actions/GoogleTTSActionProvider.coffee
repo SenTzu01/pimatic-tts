@@ -23,15 +23,15 @@ module.exports = (env) ->
           return new Promise( (resolve, reject) =>
             env.logger.debug __("TextToSpeechActionHandler - text: %s", text)
             if text.length > 200
-              @base.rejectWithErrorString Promise.reject, __("'%s' is %s characters. A maximum of 200 characters is allowed.", text, text.length) 
+              reject __("'%s' is %s characters. A maximum of 200 characters is allowed.", text, text.length) 
             else
-              @_TTSDevice.convertToSpeech(text, @input.language, @input.speed, @input.volume, @input.iterations, @input.interval).then( (result) =>
+              @_TTSDevice.convertToSpeech(text).then( (result) =>
                 env.logger.debug result
                 resolve result
               )
           ).catch( (error) =>
             env.logger.error error
-            reject error
+            @base.rejectWithErrorString Promise.reject, error
           )
       )
     

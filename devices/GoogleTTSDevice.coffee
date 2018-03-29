@@ -3,65 +3,49 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   TTSDevice = require("./TTSDevice")(env)
   GoogleAPI = require('google-tts-api')
-  Player = require('player')
+  request = require('request')
+  lame = require('lame')
+  Speaker = require('speaker')
   
   class GoogleTTSDevice extends TTSDevice
     
     constructor: (@config, lastState) ->
-      @_language = @config.language ? null
-      @_speed = @config.speed ? null
-      @_volume = @config.volume ? null
-      
       super(@config, lastState)
       
-    createSpeechResource: (text, language, speed) =>
-      language ?= @_language
-      speed ?= @_speed
-      
-      env.logger.debug __("%s - text: %s, language: %s, speed: %s", @config.id, text, language, speed)
+    createSpeechResource: (text) =>
+      env.logger.debug __("%s - text: %s, language: %s, speed: %s", @config.id, text, @_options.language, @_options.speed)
       
       return new Promise( (resolve, reject) =>
-        GoogleAPI(text, language, speed/100).then( (url) =>
+        GoogleAPI(text, @_options.language, @_options.speed/100).then( (url) =>
           resolve url
         ).catch( (error) =>
-          commons.base.rejectWithErrorString Promise.reject, __("Error obtaining TTS resource: %s", error)
+          reject __("Error obtaining TTS resource: %s", error)
         )
       )
     
     #testing audio output
-    outputSpeech:(resource, volume) =>
-      volume ?= @_volume
+    outputSpeech:(resource) =>
       
       return new Promise( (resolve, reject) =>
-        player = new Player(resource, {downloads: '/var/tmp'})
-          .on('playing', (item) =>
-            player.setVolume(volume)
-          )
-          .on('playend', (item) =>
-            return new Promise( (resolve, reject) =>
-              player = null
-              msg = __("%s was played", resource)
-              env.logger.debug msg
-              resolve msg
-            )
-          )
+        env.logger.debug __("Would play:  %s, volume: %s", resource, (@_options.volume/100).toPrecision(1))
+        format = {}
+        request
+          .get(resource)
           .on('error', (error) =>
-            return new Promise( (resolve, reject) =>
-              player = null
-              if 'No next song was found' is error
-                msg = __("%s was played", resource)
-                env.logger.debug msg
-                resolve msg
-              else
-                env.logger.error error
-                reject error
+            env.logger.debug error
           )
-        )
-      player.play()
-        
-        
-      ).catch( (error) =>
-        commons.base.rejectWithErrorString Promise.reject, __("%s - Audio output error. Reason: %s", @config.id, error)
+          .pipe(new lame.Decoder())
+          .on('format', (format) =>
+            console.log(format)
+          )
+          .pipe(new Speaker(format))
+          .on('error', (err) =>
+              env.logger.debug err
+          )
+          .on('finish', () =>
+            console.log("finished playback")
+          )
+        resolve true
       )
       
     destroy: () ->
