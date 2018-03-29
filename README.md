@@ -3,38 +3,41 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 
 ## Features
 - Provides a rule action allowing Pimatic to speak text over connected speakers
-- Support for high quality speech synthesis in a large number of languages leveraging the Google TTS API
-- More speech synthesis platforms may be supported in the future
+- Currently supports the cloud based Google TTS API
+- Plugin has been created to easily plugin other TTS platforms in future, as well as audio output devices
+- Audio output to connected audio devices is achieved by streaming PCM audio to the ALSA backend on Debian/Ubuntu
 
-### Rule syntax and examples: 
+## Rule syntax and examples: 
 
-## Syntax
-<b>Say "text with $pimatic-variables" using <languageCode> speed <n> repeat <n> interval <n></b>
+### Syntax
+<b>Say "text with $pimatic-variables" using <TTSDevice></b>
 
-* using <languageCode>  (default: "en-GB")  - defines the language to use for the speech synthesis . For supported languages and corresponding codes see: https://cloud.google.com/speech/docs/languages
-* speed <int>           (default: 40)       - defines the speed of the spoken text 
-* repeat <int>          (default: 1)        - defines the number of times the message should be spoken
-* interval <int>        (default: 10)       - defines the time in seconds between the voice messages
+* <TTSDevice> - determines the Text-to-Speech device to use for speech synthesis. 
 
+### Example
+- when trigger: $activity is "wakeup" then Say "Goodmorning everyone! I have set the home for waking up comfortably." using google-tts-device
 
-- when trigger: $activity is "wakeup" then Say "Goodmorning everyone! I have set the home for waking up comfortably." using "en-GB" speed 40 repeat 1 interval 0
+## Text-to-Speech Device configuration options:
+* language <enum>       (default: en-GB)    - For supported languages and corresponding codes see: https://cloud.google.com/speech/docs/languages
+* speed <0-100>         (default: 40)       - Velocity of the TTS voice 
+* volume <0-100>        (default: 50)       - Sets gain volume for audio output of the TTS voice
+* repeat <int>          (default: 1)        - Number of times a TTS voice message should be repeated
+* interval <int>        (default: 10)       - Time in seconds between repeats of the same TTS voice message
 
 ## Installation and Configuration:
 
 ### Install prerequisites as needed for your system:
 - ALSA
-- Alsa.h
+- Alsa.h (Needed for compiling modules on which pimatic-tts depends)
 - mpg321
 - lame
 
 Raspbian / Debian example to install prerequisites:
-````sudo apt-get install alsa-utils libasound2-dev mpg321 lame````
+````sudo apt-get install alsa-utils mpg321 lame libasound2-dev````
 
 ### Installation
-
 - Install Pimatic-tts via the Pimatic frontend (preferred), activate the plugin and restart Pimatic
-
-Alternatively add it to the Plugin section of your config.json (be sure to stop Pimatic before making modifications!):
+- Alternatively add it to the Plugin section of your config.json (be sure to stop Pimatic before making modifications!):
 ````json
 {
   "plugin": "tts",
@@ -45,13 +48,12 @@ Alternatively add it to the Plugin section of your config.json (be sure to stop 
 ### Support
 
 ## Known issues:
-- Pimatic-tts requires to be connected to have an internet connection in order to access Google cloud services
+- Google cloud limits the length of a TTS text string to 200 characters (should be sufficient for most use cases)
+- Pimatic-tts (Google TTS API) requires an internet connection (which likely is the case already as you want to install the plugin)
 
 ## Changelog:
 - V0.0.1 - Initial version providing speech synthesis using the Google TTS API
 
 ## Roadmap
-- Implement a framework / abstraction layer to easily add different synthesizers and players
 - Implement an offline voice synthesizer next to the existing Google API
-- Implement the ability to deliver speech through network connected devices
-
+- Implement the ability to deliver speech through network connected devices (We should dream, shouldn't we)

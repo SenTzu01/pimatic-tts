@@ -7,17 +7,21 @@
   },
   "main": "tts.coffee",
   "files": [
+    "actions",
+    "devices",
+    "resources",
     "tts.coffee",
     "tts-config-schema.coffee",
+    "google-device-config-schema.coffee",
     "LICENSE",
-    "HISTORY.md",
     "README.md"
   ],
   "keywords": [
-    "Pimatic",
+    "home automation",
+    "pimatic",
     "tts",
     "Text-to-Speech",
-    "Text to Speech"
+    "voice"
   ],
   "version": "0.0.1",
   "homepage": "https://github.com/SenTzu01/pimatic-tts",
@@ -40,7 +44,10 @@
   "dependencies": {
     "pimatic-plugin-commons": "^0.9.5",
     "google-tts-api": "^0.0.2",
-    "player": "^0.6.1"
+    "request": "^2.85.0",
+    "lame": "^1.1.2",
+    "pcm-volume": "^1.0.0",
+    "speaker": "^0.4.1"
   },
   "optionalDependencies": {},
   "engines": {
