@@ -1,6 +1,6 @@
 {
   "name": "pimatic-tts",
-  "description": "Pimatic plugin to perform Text-to-Speech",
+  "description": "Pimatic plugin providing Text-to-Speech capability",
   "author": {
     "name": "SenTzu01",
     "url": "https://github.com/SenTzu01"
