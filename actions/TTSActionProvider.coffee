@@ -37,7 +37,7 @@ module.exports = (env) ->
       setDelay = (m, input) => ttsInput.interval = input
       
       m = M(input, context)
-        .match("Say ")
+        .match(["speak ", "Speak ", "say ", "Say "])
         .matchStringWithVars(setText)
         .match(" using ")
         .matchDevice(SpeechDevices, setDevice)
