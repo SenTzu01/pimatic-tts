@@ -13,13 +13,13 @@ module.exports = (env) ->
     constructor: (@config, lastState) ->
       super(@config, lastState)
       
-    createSpeechResource: (text) =>
+    createSpeechResource: (message) =>
       maxLengthGoogle = 200
       
-      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, text, @_options.language, @_options.speed)
+      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, message.parsed, @_options.language, @_options.speed)
       return new Promise( (resolve, reject) =>
-        reject __("'%s' is %s characters. A maximum of 200 characters is allowed.", text, text.length) unless text.length < maxLengthGoogle
-        GoogleAPI(text, @_options.language, @_options.speed/100).then( (url) =>
+        reject __("'%s' is %s characters. A maximum of 200 characters is allowed.", message.parsed, message.parsed.length) unless message.parsed.length < maxLengthGoogle
+        GoogleAPI(message.parsed, @_options.language, @_options.speed/100).then( (url) =>
           resolve url
         ).catch( (error) =>
           reject __("Error obtaining TTS resource: %s", error)
@@ -40,49 +40,40 @@ module.exports = (env) ->
       
       return new Promise( (resolve, reject) =>
         format = {}
-        pcmDecoder = new Lame.Decoder()
-        volControl = new Volume(@_pcmVolume(@_options.volume))
         
+        audioDecoder = new Lame.Decoder()
+          .on('format', (pcmFormat) =>
+            env.logger.debug pcmFormat
+            
+            speaker = new Speaker(pcmFormat)
+              .on('open', () =>
+                env.logger.debug __("%s: Audio output of '%s' started.", @id, @_latestText)
+              )
+          
+              .on('error', (error) =>
+                msg = __("%s: Audio output of '%s' failed. Error: %s", @id, @_latestText, error)
+                env.logger.debug msg
+                reject msg
+              )
+          
+              .on('finish', () =>
+                msg = __("%s: Audio output of '%s' completed successfully.", @id, @_latestText)
+                env.logger.debug msg
+                resolve msg
+              )
+            volControl = new Volume(@_pcmVolume(@_options.volume))
+            volControl.pipe(speaker)
+            audioDecoder.pipe(volControl)
+          )
+          
         Request
           .get(resource)
           .on('error', (error) =>
-            msg = __("TTS: Failure reading audio resource '%s'. Error: %s", resource, error)
+            msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
             env.logger.debug msg
             reject msg
           )
-          .pipe(pcmDecoder)
-        
-        pcmDecoder.pipe(volControl)
-        
-        pcmDecoder.on('format', (format) =>
-          env.logger.debug format
-          
-          speaker = new Speaker(format)
-          
-          volControl.pipe(speaker)
-          ### TEST
-          setTimeout(( =>
-            env.logger.debug __("setting volume to: %s", @_pcmVolume(@_options.volume-70))
-            volControl.setVolume(@_pcmVolume(@_options.volume-70))
-          ), 1000)
-          ###
-          
-          speaker.on('open', () =>
-            env.logger.debug __("TTS: Audio output of '%s' started.", @_latestText)
-          )
-          
-          speaker.on('error', (error) =>
-            msg = __("TTS: Audio output of '%s' failed. Error: %s", @_latestText, error)
-            env.logger.debug msg
-            reject msg
-          )
-          
-          speaker.on('finish', () =>
-            msg = __("TTS: Audio output of '%s' completed successfully.", @_latestText)
-            env.logger.debug msg
-            resolve msg
-          )
-        )
+          .pipe(audioDecoder)
       )
       
     destroy: () ->

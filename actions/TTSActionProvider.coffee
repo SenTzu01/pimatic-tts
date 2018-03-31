@@ -9,13 +9,17 @@ module.exports = (env) ->
     
     parseAction: (input, context) =>
       ttsInput = {
-        text: null,
+        message: {
+          original: null,
+          hasVars: false,
+          parsed: null
+        },
         device: null,
         language: null,
         speed: null,
         volume: null,
         iterations: null,
-        interval: null
+        interval: null,
       }
       
       SpeechDevices = _(@framework.deviceManager.devices).values().filter(
@@ -23,7 +27,7 @@ module.exports = (env) ->
       ).value()
       
       setDevice = (m, d) => ttsInput.device = d
-      setText = (m, input) => ttsInput.text = input
+      setText = (m, input) => ttsInput.message.original = input
       setLanguage = (m, input) => ttsInput.language = input
       setSpeed = (m, input) => ttsInput.speed = input
       setVolume = (m, input) => ttsInput.volume = input
@@ -56,15 +60,16 @@ module.exports = (env) ->
       super()
     
     executeAction: (simulate) =>
-      console.log @framework.variableManager.extractVariables(@ttsActionData.text)
-      @framework.variableManager.evaluateStringExpression(@ttsActionData.text).then( (text) =>
+      @ttsActionData.message.hasVars = true if @framework.variableManager.extractVariables(@ttsActionData.message.original).length > 0
+      @framework.variableManager.evaluateStringExpression(@ttsActionData.message.original).then( (text) =>
         env.logger.debug __("TTSActionHandler - Text: %s, Device: %s", text, @ttsActionData.device.id)
+        @ttsActionData.message.parsed = text
         if simulate
           return __("would convert Text to Speech: \"%s\"", text)
         
         else
           return new Promise( (resolve, reject) =>
-            @ttsActionData.device.convertToSpeech(text).then( (result) =>
+            @ttsActionData.device.convertToSpeech(@ttsActionData).then( (result) =>
               env.logger.debug result
               resolve result
             )
