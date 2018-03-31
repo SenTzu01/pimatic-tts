@@ -13,6 +13,7 @@
     "tts.coffee",
     "tts-config-schema.coffee",
     "google-device-config-schema.coffee",
+    "pico-device-config-schema.coffee",
     "LICENSE",
     "README.md"
   ],
@@ -25,7 +26,7 @@
     "Google Text-to-Speech",
     "Pico2Wave"
   ],
-  "version": "0.0.2",
+  "version": "0.0.3",
   "homepage": "https://github.com/SenTzu01/pimatic-tts",
   "private": false,
   "repository": {
