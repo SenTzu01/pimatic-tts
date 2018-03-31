@@ -14,8 +14,23 @@ module.exports = (env) ->
         discrete: true
       speed:
         description: "Voice speed"
-        type: t.string
+        type: t.number
         acronym: 'Voice Speed:'
+        discrete: true
+      volume:
+        description: "Voice volume"
+        type: t.number
+        acronym: 'Volume:'
+        discrete: true
+      repeat:
+        description: "Repeats of same message"
+        type: t.number
+        acronym: 'Repeat:'
+        discrete: true
+      interval:
+        description: "Time between two repeats"
+        type: t.number
+        acronym: 'Interval:'
         discrete: true
     
     actions:
@@ -28,7 +43,28 @@ module.exports = (env) ->
         description: "Returns the Voice speed"
         returns:
           speed:
+            type: t.number
+      getVolume:
+        description: "Returns the gain volume applied on the audio output stream"
+        returns:
+          language:
+            type: t.number
+      getRepeat:
+        description: "Returns the number of times the same message is repeated"
+        returns:
+          language:
+            type: t.number
+      getInterval:
+        description: "Returns the amount of time between two repeats"
+        returns:
+          language:
+            type: t.number
+      convertToSpeech:
+        description: "Converts Text-to-Speech and outputs Audio"
+        params:
+          text:
             type: t.string
+      
     
     createSpeechResource: () ->
       throw new Error "Function \"createSpeechResource\" is not implemented!"

@@ -1,0 +1,8 @@
+{
+"de-DE":{ "code": "de-DE", "description":"German (Germany)"},
+"en-GB":{ "code": "en-GB", "description":"English (United Kingdom)"},
+"en-US":{ "code": "en-US", "description":"English (United States)"},
+"es-ES":{ "code": "es-ES", "description":"Spanish (Spain)"},
+"fr-FR":{ "code": "fr-FR", "description":"French (France)"},
+"it-IT":{ "code": "it-IT", "description":"Italian (Italy)"}
+}

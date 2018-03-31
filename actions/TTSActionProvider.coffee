@@ -1,18 +1,13 @@
 module.exports = (env) ->
   _ = env.require 'lodash'
+  Promise = env.require 'bluebird'
   M = env.matcher
 
   class TTSActionProvider extends env.actions.ActionProvider
-    _ttsProvider: null
     
-    constructor: () ->
-      throw new Error "You must set property\"ttsProvider\" !" if !@_ttsProvider?
+    constructor: (@framework, @config) ->
     
-    _setProvider: (provider) ->
-      @_ttsProvider = provider
-
-      
-    _parse: (input, context) =>
+    parseAction: (input, context) =>
       ttsInput = {
         text: null,
         device: null,
@@ -24,11 +19,10 @@ module.exports = (env) ->
       }
       
       SpeechDevices = _(@framework.deviceManager.devices).values().filter(
-        (device) => device.config.class is @_ttsProvider.deviceClass
+        (device) => device.hasAction("convertToSpeech")
       ).value()
       
-      setDevice = (m, d) =>
-        ttsInput.device = d
+      setDevice = (m, d) => ttsInput.device = d
       setText = (m, input) => ttsInput.text = input
       setLanguage = (m, input) => ttsInput.language = input
       setSpeed = (m, input) => ttsInput.speed = input
@@ -47,9 +41,42 @@ module.exports = (env) ->
         return {
           token: match
           nextInput: input.substring(match.length)
-          actionHandler: new @_ttsProvider.actionHandler(@framework, @config, ttsInput)
+          actionHandler: new TTSActionHandler(@framework, @config, ttsInput)
         }
       else
         return null
   
+  class TTSActionHandler extends env.actions.ActionHandler
+  
+    constructor: (@framework, @config, @ttsActionData) ->
+      super()
+      
+    setup: () ->
+      @dependOnDevice(@ttsActionData.device)
+      super()
+    
+    executeAction: (simulate) =>
+      console.log @framework.variableManager.extractVariables(@ttsActionData.text)
+      @framework.variableManager.evaluateStringExpression(@ttsActionData.text).then( (text) =>
+        env.logger.debug __("TTSActionHandler - Text: %s, Device: %s", text, @ttsActionData.device.id)
+        if simulate
+          return __("would convert Text to Speech: \"%s\"", text)
+        
+        else
+          return new Promise( (resolve, reject) =>
+            @ttsActionData.device.convertToSpeech(text).then( (result) =>
+              env.logger.debug result
+              resolve result
+            )
+          ).catch( (error) =>
+            env.logger.error error
+            @base.rejectWithErrorString Promise.reject, error
+          )
+      )
+    
+    destroy: () ->
+      super()
+  
   return TTSActionProvider
+  
+  

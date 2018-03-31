@@ -14,9 +14,11 @@ module.exports = (env) ->
       super(@config, lastState)
       
     createSpeechResource: (text) =>
-      env.logger.debug __("TTS: Getting TTS Resource for text: %s, language: %s, speed: %s", text, @_options.language, @_options.speed)
+      maxLengthGoogle = 200
       
+      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, text, @_options.language, @_options.speed)
       return new Promise( (resolve, reject) =>
+        reject __("'%s' is %s characters. A maximum of 200 characters is allowed.", text, text.length) unless text.length < maxLengthGoogle
         GoogleAPI(text, @_options.language, @_options.speed/100).then( (url) =>
           resolve url
         ).catch( (error) =>
