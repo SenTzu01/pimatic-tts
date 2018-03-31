@@ -4,6 +4,11 @@ module.exports = {
     title: "Google device configuration options"
     type: "object"
     properties:
+      tmpDir:
+        description: "Directory used for storing converted speech files"
+        type: "string"
+        required: false
+        default: "/tmp"
       language:
         description: "Language used for synthesized speech. See README for available languages"
         type: "string"

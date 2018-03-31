@@ -7,11 +7,15 @@ module.exports = (env) ->
   Lame = require('lame')
   Volume = require('pcm-volume')
   Speaker = require('speaker')
-  
+  fs = require('fs')
+  Crypto = require('crypto')
+    
   class GoogleTTSDevice extends TTSDevice
     
     constructor: (@config, lastState) ->
       super(@config, lastState)
+      @_options.tmpDir = @config.tmpDir ? '/tmp'
+      @_fileResource = true
       
     createSpeechResource: (message) =>
       maxLengthGoogle = 200
@@ -19,10 +23,50 @@ module.exports = (env) ->
       env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, message.parsed, @_options.language, @_options.speed)
       return new Promise( (resolve, reject) =>
         reject __("'%s' is %s characters. A maximum of 200 characters is allowed.", message.parsed, message.parsed.length) unless message.parsed.length < maxLengthGoogle
-        GoogleAPI(message.parsed, @_options.language, @_options.speed/100).then( (url) =>
-          resolve url
-        ).catch( (error) =>
-          reject __("Error obtaining TTS resource: %s", error)
+        
+        md5 = Crypto.createHash('md5')
+        file = @_options.tmpDir + '/' + md5.update(message.parsed).digest('hex') + '.mp3'
+        
+        fs.open(file, 'r', (error, fd) =>
+          if error
+            if error.code is "ENOENT"
+              # file does not exist. create voice file
+              env.logger.debug("%s: Creating speech resource file '%s'", @id, file)
+              GoogleAPI(message.parsed, @_options.language, @_options.speed/100).then( (url) =>
+                
+                fsWrite = fs.createWriteStream(file)
+                fsWrite.on('finish', () =>
+                  fsWrite.close( () => resolve file )
+                )
+                fsWrite.on('error', (err) =>
+                  fs.unlink(file)
+                  reject(err)
+                )
+                
+                resRead = Request.get(url)
+                resRead.on('error', (error) =>
+                  msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, url, error)
+                  env.logger.debug msg
+                  reject msg
+                )
+                resRead.pipe(fsWrite)
+              
+              ).catch( (error) =>
+                reject __("Error obtaining TTS resource: %s", error)
+              )
+              
+            else
+              # something else is wrong. file exists but cannot be read
+              env.logger.warning __("%s: %s already exists, but cannot be accessed. Attempting to remove. Error: %s", @id, file, error.code)
+              @_removeResource(file)
+              reject error
+              
+          else
+            fs.close(fd, () =>
+              # return filename as it already is available
+              env.logger.debug __("%s: Speech resource file '%s' already exist. Reusing file.", @id, file)
+              resolve file
+            )
         )
       )
     
@@ -53,21 +97,12 @@ module.exports = (env) ->
             volControl.pipe(speaker)
             audioDecoder.pipe(volControl)
           )
-          
-        Request
-          .get(resource)
-          .on('error', (error) =>
-            msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
-            env.logger.debug msg
-            reject msg
-          )
-          .pipe(audioDecoder)
+        streamData = fs.createReadStream(resource)
+        streamData.pipe(audioDecoder)
+        
       )
       
     destroy: () ->
       super()
   
   return GoogleTTSDevice
-  
-  
-        

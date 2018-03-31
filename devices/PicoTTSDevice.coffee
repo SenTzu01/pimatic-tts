@@ -60,9 +60,11 @@ module.exports = (env) ->
               @createSpeechResource(message)
               
           else
-            # return filename as it already is available
-            env.logger.debug __("%s: Speech resource file '%s' already exist. Reusing file.", @id, file)
-            resolve file
+            fs.close(fd, () =>
+              # return filename as it already is available
+              env.logger.debug __("%s: Speech resource file '%s' already exist. Reusing file.", @id, file)
+              resolve file
+            )
         )
       ).catch( (error) =>
         reject __("Error obtaining TTS resource: %s", error)
