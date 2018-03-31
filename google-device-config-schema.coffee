@@ -21,7 +21,7 @@ module.exports = {
         default: 50
         required: false
       repeat:
-        description: "Sets the "
+        description: "Sets the number of times a speech message is repeated"
         type: "number"
         default: 1
         required: false
