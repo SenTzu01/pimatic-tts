@@ -136,6 +136,16 @@ module.exports = (env) ->
           reject __("Error while converting '%s' to speech: %s", @_latestText, error)
         )
       )
+    
+    setVolume: (value) ->
+      if value is @_options.volume then return
+      @_options.volume = value
+      @emit('volume', value)
+      
+    _pcmVolume: (value) ->
+      volMaxRel = 100
+      volMaxAbs = 150
+      return (value/volMaxRel*volMaxAbs/volMaxRel).toPrecision(2)
       
     getLanguage: -> Promise.resolve(@config.language)
     getSpeed: -> Promise.resolve(@config.speed)

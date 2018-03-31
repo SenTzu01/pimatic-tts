@@ -68,20 +68,8 @@ module.exports = (env) ->
         reject __("Error obtaining TTS resource: %s", error)
       )
     
-    setVolume: (value) ->
-      if value is @_options.volume then return
-      @_options.volume = value
-      @emit('volume', value)
-      
-    _pcmVolume: (value) ->
-      volMaxRel = 100
-      volMaxAbs = 150
-      return (value/volMaxRel*volMaxAbs/volMaxRel).toPrecision(2)
-      
     outputSpeech:(resource) =>
-      
       return new Promise( (resolve, reject) =>
-        
         
         audioDecoder = new Wav.Reader()
           .on('format', (pcmFormat) =>
