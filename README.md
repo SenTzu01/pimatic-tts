@@ -3,7 +3,7 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 
 ## Features
 - Provides a rule action allowing Pimatic to speak text over connected speakers
-- Currently supports the cloud based Google TTS API
+- Currently supports the cloud based Google TTS API and Pico2Wave on Linux for offline TTS
 - Device approach holding the config allows for shorter action definitions, as most config will always be the same. You can configure several devices each holding a different output config. 
 - Device approach also allows for greater flexibility from a development perspective
 - Plugin has been created to easily plugin other TTS platforms in future, as well as audio output devices
@@ -19,12 +19,6 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 ### Example
 - when trigger: $activity is "wakeup" then Say "Goodmorning everyone! I have set the home for waking up comfortably." using google-tts-device
 
-## TTS Device configuration options:
-* language <enum>       (default: en-GB)    - For supported languages and corresponding codes see: https://cloud.google.com/speech/docs/languages
-* speed <0-100>         (default: 40)       - Velocity of the TTS voice 
-* volume <0-100>        (default: 50)       - Sets gain volume for audio output of the TTS voice
-* repeat <int>          (default: 1)        - Number of times a TTS voice message should be repeated
-* interval <int>        (default: 10)       - Time in seconds between repeats of the same TTS voice message
 
 ## Installation and Configuration:
 
@@ -33,9 +27,13 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 - Alsa.h (Needed for compiling modules on which pimatic-tts depends)
 - mpg321
 - lame
+- Pico2Wave (For using offline Text-To-Speech)
+
+  # sudo apt-get install libttspico0 libttspico-utils libttspico-data alsa-utils
 
 Raspbian / Debian example to install prerequisites:
-````sudo apt-get install alsa-utils mpg123 lame libasound2-dev````
+Google TTS : ````sudo apt-get install alsa-utils mpg123 lame libasound2-dev````
+Pico2Wave: ````sudo apt-get install libttspico0 libttspico-utils libttspico-data alsa-utils````
 
 ### Installation
 - Install Pimatic-tts via the Pimatic frontend (preferred), activate the plugin and restart Pimatic

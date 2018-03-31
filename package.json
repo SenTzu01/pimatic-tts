@@ -21,9 +21,11 @@
     "pimatic",
     "tts",
     "Text-to-Speech",
-    "voice"
+    "voice",
+    "Google Text-to-Speech",
+    "Pico2Wave"
   ],
-  "version": "0.0.1",
+  "version": "0.0.2",
   "homepage": "https://github.com/SenTzu01/pimatic-tts",
   "private": false,
   "repository": {
