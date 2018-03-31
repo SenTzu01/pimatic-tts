@@ -25,7 +25,7 @@ module.exports = (env) ->
           TTSProvider = TTSProviders[obj]
           
           @base.debug "Registering device class #{TTSProvider.device}"
-          deviceConfig = require("./" + TTSProvider.deviceDef)
+          deviceConfig = require("./devices/" + TTSProvider.deviceDef)
           
           if TTSProvider.langResource?
             languages = require('./resources/'+ TTSProvider.langResource)
