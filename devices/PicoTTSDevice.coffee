@@ -26,38 +26,41 @@ module.exports = (env) ->
         file = @_options.tmpDir + '/' + md5.update(text).digest('hex') + '.wav'
         
         fs.open(file, 'r', (error, fd) =>
-          if (error)
-            if (error.code is "ENOENT")
+          if error
+            if error.code is "ENOENT"
               # file does not exist. create voice file
+              env.logger.debug("%s: Creating speech resource file '%s' using %s", @id, file, @_options.executable)
               args = [ '-l', @_options.language, '-w', file, text]
               
               pico = spawn(@_options.executable, args)
-                .stdout.on( 'data', (data) =>
-                  env.logger.debug __("%s output: %s", @_options.executable, data)
+              pico.stdout.on( 'data', (data) =>
+                env.logger.debug __("%s output: %s", @_options.executable, data)
+              
+              )
+              pico.stderr.on('data', (error) =>
+                env.logger.error __("%s: Error creating speech resource '%s' using %s. Error: %s", @id, text, @_options.executable, error)
+              
+              )
+              pico.on('close', (code) =>
+                if (code is 0)
+                  env.logger.debug __("%s: Completed creating speech resource '%s' using %s.", @id, text, @_options.executable)
+                  resolve file
                 
-                )
-                .stderr.on('data', (error) =>
-                  env.logger.error __("Error creating speech resource '%s' using %s. Error: %s", text, @_options.executable, error)
-                
-                )
-                .on('close', (code) =>
-                  if (code is 0)
-                    env.logger.debug __("Completed creating speech resource '%s' using %s.", text, @_options.executable)
-                    resolve file
-                  
-                  else
-                    msg = __("Error creating speech resource '%s' using %s. Error: %s", text, @_options.executable, code)
-                    env.logger.error msg
-                    reject msg
-                
-                )
+                else
+                  msg = __("%s: Error creating speech resource for '%s' using %s. Error: %s", @id, text, @_options.executable, code)
+                  env.logger.error msg
+                  reject msg
+              
+              )
+              
             else
               # something else is wrong. file exists but cannot be read
               # need to handle this appropriately
               reject __("%s: %s already exists, but there is an error accessing it. Error: %s", @id, file, error.code)
-          
-          # return filename as it already is available
-          resolve file
+          else
+            # return filename as it already is available
+            env.logger.debug __("%s: Speech resource file '%s' already exist. Reusing file.", @id, file)
+            resolve file
         )
       ).catch( (error) =>
         reject __("Error obtaining TTS resource: %s", error)
