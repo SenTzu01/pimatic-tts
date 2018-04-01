@@ -1,107 +1,103 @@
 module.exports = (env) ->
-
+  
+  _ = env.require 'lodash'
+  t = env.require('decl-api').types
   Promise = env.require 'bluebird'
   TTSDevice = require("./TTSDevice")(env)
   GoogleAPI = require('google-tts-api')
   Request = require('request')
   Lame = require('lame')
-  Volume = require('pcm-volume')
-  Speaker = require('speaker')
   fs = require('fs')
-  Crypto = require('crypto')
     
   class GoogleTTSDevice extends TTSDevice
     
     constructor: (@config, lastState) ->
-      super(@config, lastState)
-      @_options.tmpDir = @config.tmpDir ? '/tmp'
-      @_fileResource = true
+      @id = @config.id
+      @name = @config.name
       
-    createSpeechResource: (message) =>
-      maxLengthGoogle = 200
+      @_options = {
+        speed: @config.speed ? 100
+        audioDecoder: require('lame').Decoder
+        audioFormat: 'mp3'
+        maxStringLenght: 200
+      }
       
-      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, message.parsed, @_options.language, @_options.speed)
-      return new Promise( (resolve, reject) =>
-        reject __("'%s' is %s characters. A maximum of 200 characters is allowed.", message.parsed, message.parsed.length) unless message.parsed.length < maxLengthGoogle
+      @actions = _.cloneDeep @actions
+      @attributes =  _.cloneDeep @attributes
         
-        md5 = Crypto.createHash('md5')
-        file = @_options.tmpDir + '/' + md5.update(message.parsed).digest('hex') + '.mp3'
+      @actions.getSpeed = {
+        description: "Returns the Voice speed"
+        returns:
+          speed:
+            type: t.number}
+      
+      @attributes.speed = {
+        description: "Voice speed"
+        type: t.number
+        acronym: 'Voice Speed:'
+        discrete: true}
+      
+      super()
+    
+    getSpeed: -> Promise.resolve(@_options.speed)
+    
+    getTTS: () =>
+      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, @_data.text.parsed, @_options.language, @_options.speed)
+      @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_data.text.parsed.length) unless @_data.text.parsed.length < @_options.maxStringLenght
+      
+      return new Promise( (resolve, reject) =>
+        file = @_generateHashedFilename()
         
         fs.open(file, 'r', (error, fd) =>
           if error
             if error.code is "ENOENT"
-              # file does not exist. create voice file
-              env.logger.debug("%s: Creating speech resource file '%s'", @id, file)
-              GoogleAPI(message.parsed, @_options.language, @_options.speed/100).then( (url) =>
+              env.logger.debug("%s: Creating speech resource file '%s' using %s", @id, file, @_options.executable)
+              
+              env.logger.info("%s: Generating speech resource for '%s'", @id, @_data.text.parsed)
+              
+              #
+              GoogleAPI(@_data.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
                 
                 fsWrite = fs.createWriteStream(file)
-                fsWrite.on('finish', () =>
-                  fsWrite.close( () => resolve file )
-                )
-                fsWrite.on('error', (err) =>
-                  fs.unlink(file)
-                  reject(err)
-                )
+                  .on('finish', () =>
+                    fsWrite.close( () => 
+                      
+                      env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_data.text.parsed)
+                      resolve file
+                    )
+                  )
+                  .on('error', (error) =>
+                    fs.unlink(file)
+                    @base.rejectWithErrorString Promise.reject, error
+                  )
                 
-                resRead = Request.get(url)
-                resRead.on('error', (error) =>
-                  msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, url, error)
-                  env.logger.debug msg
-                  reject msg
-                )
+                resRead = Request.get(resource)
+                  .on('error', (error) =>
+                    msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
+                    env.logger.debug msg
+                    @base.rejectWithErrorString Promise.reject, msg
+                  )
                 resRead.pipe(fsWrite)
               
-              ).catch( (error) =>
-                reject __("Error obtaining TTS resource: %s", error)
-              )
+              ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+              #
               
             else
-              # something else is wrong. file exists but cannot be read
+              # File exists but cannot be read, delete it, and reject with error
               env.logger.warning __("%s: %s already exists, but cannot be accessed. Attempting to remove. Error: %s", @id, file, error.code)
               @_removeResource(file)
-              reject error
-              
+              @base.rejectWithErrorString Promise.reject, error
+          
           else
             fs.close(fd, () =>
-              # return filename as it already is available
-              env.logger.debug __("%s: Speech resource file '%s' already exist. Reusing file.", @id, file)
+              env.logger.debug __("%s: Speech resource for '%s' already exist. Reusing file.", @id, file)
+              
+              env.logger.info __("%s: Using cached speech resource for '%s'.", @id, @_data.text.parsed)
               resolve file
             )
         )
-      )
+      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
-    outputSpeech:(resource) =>
-      return new Promise( (resolve, reject) =>
-        
-        audioDecoder = new Lame.Decoder()
-          .on('format', (pcmFormat) =>
-            env.logger.debug pcmFormat
-            
-            speaker = new Speaker(pcmFormat)
-              .on('open', () =>
-                env.logger.debug __("%s: Audio output of '%s' started.", @id, @_latestText)
-              )
-          
-              .on('error', (error) =>
-                msg = __("%s: Audio output of '%s' failed. Error: %s", @id, @_latestText, error)
-                env.logger.debug msg
-                reject msg
-              )
-          
-              .on('finish', () =>
-                msg = __("%s: Audio output of '%s' completed successfully.", @id, @_latestText)
-                env.logger.debug msg
-                resolve msg
-              )
-            volControl = new Volume(@_pcmVolume(@_options.volume))
-            volControl.pipe(speaker)
-            audioDecoder.pipe(volControl)
-          )
-        streamData = fs.createReadStream(resource)
-        streamData.pipe(audioDecoder)
-        
-      )
-      
     destroy: () ->
       super()
   

@@ -2,7 +2,7 @@
   "name": "pimatic-tts",
   "description": "Pimatic plugin providing Text-to-Speech capability",
   "author": {
-    "name": "SenTzu01",
+    "name": "Danny Wigmans (SenTzu01)",
     "url": "https://github.com/SenTzu01"
   },
   "main": "tts.coffee",
