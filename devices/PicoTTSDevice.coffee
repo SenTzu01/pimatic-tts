@@ -1,9 +1,11 @@
 module.exports = (env) ->
   _ = env.require 'lodash'
+  commons = require('pimatic-plugin-commons')(env)
   Promise = env.require 'bluebird'
   TTSDevice = require("./TTSDevice")(env)
   spawn = require('child_process').spawn
   fs = require('fs')
+  wav = require('wav')
   
   class PicoTTSDevice extends TTSDevice
     
@@ -11,15 +13,15 @@ module.exports = (env) ->
       @id = @config.id
       @name = @config.name
       
+      @actions = _.cloneDeep @actions
+      @attributes = _.cloneDeep @attributes
+      
       @_options = {
-        audioDecoder: require('wav').Reader
+        audioDecoder: wav.Reader
         audioFormat: 'wav'
         executable: @config.executable ? '/usr/bin/pico2wav'
         arguments: (file, text) => return [ '-l', @_options.language, '-w', file, text]
       }
-      
-      @actions = _.cloneDeep @actions
-      @attributes =  _.cloneDeep @attributes
       
       super()
 

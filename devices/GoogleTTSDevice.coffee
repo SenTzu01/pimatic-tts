@@ -1,30 +1,24 @@
 module.exports = (env) ->
   
   _ = env.require 'lodash'
+  commons = require('pimatic-plugin-commons')(env)
   t = env.require('decl-api').types
   Promise = env.require 'bluebird'
-  TTSDevice = require("./TTSDevice")(env)
-  GoogleAPI = require('google-tts-api')
-  Request = require('request')
-  Lame = require('lame')
+  googleAPI = require('google-tts-api')
+  request = require('request')
+  lame = require('lame')
   fs = require('fs')
-    
+  TTSDevice = require("./TTSDevice")(env)
+  
   class GoogleTTSDevice extends TTSDevice
     
     constructor: (@config, lastState) ->
       @id = @config.id
       @name = @config.name
       
-      @_options = {
-        speed: @config.speed ? 100
-        audioDecoder: require('lame').Decoder
-        audioFormat: 'mp3'
-        maxStringLenght: 200
-      }
-      
       @actions = _.cloneDeep @actions
-      @attributes =  _.cloneDeep @attributes
-        
+      @attributes = _.cloneDeep @attributes
+      
       @actions.getSpeed = {
         description: "Returns the Voice speed"
         returns:
@@ -36,7 +30,14 @@ module.exports = (env) ->
         type: t.number
         acronym: 'Voice Speed:'
         discrete: true}
-      
+        
+      @_options = {
+        speed: @config.speed ? 100
+        audioDecoder: lame.Decoder
+        audioFormat: 'mp3'
+        maxStringLenght: 200
+      }
+
       super()
     
     getSpeed: -> Promise.resolve(@_options.speed)
@@ -46,7 +47,7 @@ module.exports = (env) ->
       return new Promise( (resolve, reject) =>
         @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_data.text.parsed.length) unless @_data.text.parsed.length < @_options.maxStringLenght
         
-        GoogleAPI(@_data.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
+        googleAPI(@_data.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
         
           fsWrite = fs.createWriteStream(file)
             .on('finish', () =>
@@ -61,7 +62,7 @@ module.exports = (env) ->
               @base.rejectWithErrorString Promise.reject, error
             )
                 
-          resRead = Request.get(resource)
+          resRead = request.get(resource)
             .on('error', (error) =>
               msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
               env.logger.debug msg

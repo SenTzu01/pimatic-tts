@@ -1,69 +1,117 @@
 module.exports = (env) ->
-
-  Promise = env.require 'bluebird'
-  commons = require('pimatic-plugin-commons')(env)
-  TTSDevice = require("./TTSDevice")(env)
-  ExampleAPI = require("example-api")
   
-  class TemplateTTSDevice extends TTSDevice
+  _ = env.require 'lodash'
+  commons = require('pimatic-plugin-commons')(env)
+  t = env.require('decl-api').types
+  Promise = env.require 'bluebird'
+  TTSDevice = require("./TTSDevice")(env)
+  GoogleAPI = require('google-tts-api')
+  Request = require('request')
+  fs = require('fs')
+  
+  #
+  # define the audio decoder module source here if needed
+  #
+  decoder = require('<decoder module')
+    
+  class GoogleTTSDevice extends TTSDevice
     
     constructor: (@config, lastState) ->
-      # Set additional variables used by this specific implementation of a TTSDevice
-      # Make sure to also define these in the device config file
-      @_language = @config.language ? null
-      @_speed = @config.speed ? null
-      @_volume = @config.volume ? null
+      @id = @config.id
+      @name = @config.name
       
-      # The constructor must call its parent passing the @config and lastState variables
-      super(@config, lastState)
+      @actions = _.cloneDeep @actions
+      @attributes = _.cloneDeep @attributes
+      
+      # Define Getter methods specific to this subclass
+      @actions.getAttribute = {
+        description: "Define additional getter methods here"
+        returns:
+          speed:
+            type: t.number}
+      
+      # Define Attributes specific to this subclass
+      @attributes.attrib = {
+        description: "Define additional attributes here"
+        type: t.number
+        acronym: 'Attribute:'
+        discrete: true}
+      
+      #
+      # Define additional options here or overload properties from the parent class
+      # These can be also be loaded from the device config, if you define these as a setting there
+      #
+      # REQUIRED: .AudioDecoder must point to the ClassName of the decoder you use
+      # REQUIRED: .AudioFormat must contain a file extension such as mp3,wav, etc. Depends on the TTS and decoder you use
+      
+      @_options = {
+        device_option: @config.device_option ? '<default>' 
+        audioDecoder: decoder.Decoder 
+        audioFormat: 'mp3'
+      }
+      
+      super()
+    
+    # Implement Getter methods for defined Getters
+    getSpeed: -> Promise.resolve(@_options.speed)
     
     #
-    # You must implement the createSpeechResource method
-    # The method must return a Promise which resolves to a resource identifier (e.g. a path or URL) which can be used by the audio player used for TTS output
+    # REQUIRED: generateResource: (file) -> Promise(resolve file, reject error)
     #
-    createSpeechResource: (text, language, speed, ...) =>
-      #
-      # Set config defaults for parameters not passed as a function parameter
-      #
-      language ?= @_language
-      speed ?= @_speed
-      
-      @_setLatestText(text)
+    # This method is the specific TTS resource generator, which should output an audio resource on disk with filename <file>
+    # 
+    # The subClass must implement this method accepting a filename (string) as input
+    # It must return a Promise 
+    #   resolving with the same file (string) after successfully generating the TTS audio resource
+    #   reject with an error on failure
+    #
+    # This Subclass inherits @_data and @_options objects which can be accessed in your method to generate the resource
+    #
+    # @_data = {
+    #    text: {
+    #      input: <string>    -> Text string with unparsed variables
+    #      static: <boolean>  -> Indicates whether the string contains variables
+    #      parsed: <string>   -> Text string with resolved variables, to be used for generating TTS
+    #    }
+    # }
+    #
+    # @_options.language = <string>   -> BCP-47 language identifier
+    # @_options.volume = <number>     -> Integer between 1 and 100
+    #
+    generateResource: (file) =>
       
       return new Promise( (resolve, reject) =>
-        return commons.base.rejectWithErrorString Promise.reject, __("string provided is null or undefined") if !text?
         
-        # IMPLEMENT TEXT-TO-SPEECH LOGIC HERE
-        ExampleAPI(text, language).then( (resource) =>
-          resolve resource
-        ).catch( (error) =>
-          commons.base.rejectWithErrorString Promise.reject, __("Error obtaining resource from Example: %s", error)
-        )
-      )
-    
-    #
-    # You must implement the outputSpeech method
-    # The method must return a Promise which resolves or rejects with a success or an error message respectively
-    #
-    outputSpeech:(volume, ...) =>
-      #
-      # Set config defaults for parameters not passed as a function parameter
-      #
-      volume ?= @_volume
-      
-      return new Promise( (resolve, reject) =>
+        # Example implementation
         
-        # IMPLEMENT AUDIO OUTPUT LOGIC HERE
-        resolve __("Stub: Should be outputting %s with volume %s", @_latestResource, volume)
-      
-      ).catch( (error) =>
-      
-        # IMPLEMENT ERROR HANDLING FOR AUDIO OUTPUT LOGIC HERE
-        commons.base.rejectWithErrorString Promise.reject, __("Audio output error: %s", error)
-      )
+        ttsAPI(@_data.text.parsed, @_options.language).then( (resource) =>
+        
+        readStream = Request.get(resource)
+          .on('error', (error) =>
+            msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
+            env.logger.debug msg
+            @base.rejectWithErrorString Promise.reject, msg
+          )
+            
+          fsWrite = fs.createWriteStream(file)
+            .on('finish', () =>
+              fsWrite.close( () => 
+                      
+                env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_data.text.parsed)
+                resolve file
+              )
+            )
+            .on('error', (error) =>
+              fs.unlink(file)
+              @base.rejectWithErrorString Promise.reject, error
+            )
+            
+          readStream.pipe(fsWrite)
+              
+        ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
-    # you must implement the destroy method calling its parent
     destroy: () ->
       super()
   
-  return TemplateTTSDevice
+  return GoogleTTSDevice
