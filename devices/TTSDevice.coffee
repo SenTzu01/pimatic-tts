@@ -59,7 +59,7 @@ module.exports = (env) ->
           text:
             type: t.object
       
-    getTTS: () -> throw new Error "Function \"createSpeechResource\" is not implemented!"
+    generateResource: () -> throw new Error "Function \"generateResource\" is not implemented!"
       
     constructor: () ->
     
@@ -82,7 +82,7 @@ module.exports = (env) ->
       return new Promise( (resolve, reject) =>
         @base.rejectWithErrorString Promise.reject, __("%s - TTS text provided is null or undefined.", @config.id) unless @_data?.text?.parsed?
         
-        @getTTS().then( (resource) =>
+        @cacheResource().then( (resource) =>
           @_setResource(resource)
           
           i = 0
@@ -90,7 +90,7 @@ module.exports = (env) ->
           playback = =>
             env.logger.debug __("%s: Starting audio output for iteration: %s", @id, i+1)
             
-            @_outputSpeech().then( (result) =>
+            @_speechOut().then( (result) =>
               env.logger.debug __("%s: Finished audio output for iteration: %s", @id, i+1)
               
               results.push result
@@ -134,7 +134,40 @@ module.exports = (env) ->
       volMaxAbs = 150
       return (value/volMaxRel*volMaxAbs/volMaxRel).toPrecision(2)
     
-    _outputSpeech:() =>
+    cacheResource: () =>
+      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, @_data.text.parsed, @_options.language, @_options.speed)
+      
+      return new Promise( (resolve, reject) =>
+        file = @_generateHashedFilename()
+        
+        fs.open(file, 'r', (error, fd) =>
+          if error
+            if error.code is "ENOENT"
+              env.logger.debug("%s: Creating speech resource file: '%s' for text: %s ", @id, file, @_data.text.parsed)
+              
+              env.logger.info("%s: Generating speech resource for '%s'", @id, @_data.text.parsed)
+              
+              return @generateResource(file)
+                .then( (resource) => resolve resource)
+                .catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+              
+            else
+              # File exists but cannot be read, delete it, and reject with error
+              env.logger.warning __("%s: %s already exists, but cannot be accessed. Attempting to remove. Error: %s", @id, file, error.code)
+              @_removeResource(file)
+              @base.rejectWithErrorString Promise.reject, error
+          
+          else
+            fs.close(fd, () =>
+              env.logger.debug __("%s: Speech resource for '%s' already exist. Reusing file.", @id, file)
+              
+              env.logger.info __("%s: Using cached speech resource for '%s'.", @id, @_data.text.parsed)
+              resolve file
+            )
+        )
+      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+    
+    _speechOut:() =>
       return new Promise( (resolve, reject) =>
         
         audioDecoder = new @_options.audioDecoder()

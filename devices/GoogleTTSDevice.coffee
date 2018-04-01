@@ -41,61 +41,35 @@ module.exports = (env) ->
     
     getSpeed: -> Promise.resolve(@_options.speed)
     
-    getTTS: () =>
-      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, @_data.text.parsed, @_options.language, @_options.speed)
-      @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_data.text.parsed.length) unless @_data.text.parsed.length < @_options.maxStringLenght
+    generateResource: (file) =>
       
       return new Promise( (resolve, reject) =>
-        file = @_generateHashedFilename()
+        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_data.text.parsed.length) unless @_data.text.parsed.length < @_options.maxStringLenght
         
-        fs.open(file, 'r', (error, fd) =>
-          if error
-            if error.code is "ENOENT"
-              env.logger.debug("%s: Creating speech resource file '%s' using %s", @id, file, @_options.executable)
-              
-              env.logger.info("%s: Generating speech resource for '%s'", @id, @_data.text.parsed)
-              
-              #
-              GoogleAPI(@_data.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
-                
-                fsWrite = fs.createWriteStream(file)
-                  .on('finish', () =>
-                    fsWrite.close( () => 
+        GoogleAPI(@_data.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
+        
+          fsWrite = fs.createWriteStream(file)
+            .on('finish', () =>
+              fsWrite.close( () => 
                       
-                      env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_data.text.parsed)
-                      resolve file
-                    )
-                  )
-                  .on('error', (error) =>
-                    fs.unlink(file)
-                    @base.rejectWithErrorString Promise.reject, error
-                  )
-                
-                resRead = Request.get(resource)
-                  .on('error', (error) =>
-                    msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
-                    env.logger.debug msg
-                    @base.rejectWithErrorString Promise.reject, msg
-                  )
-                resRead.pipe(fsWrite)
-              
-              ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
-              #
-              
-            else
-              # File exists but cannot be read, delete it, and reject with error
-              env.logger.warning __("%s: %s already exists, but cannot be accessed. Attempting to remove. Error: %s", @id, file, error.code)
-              @_removeResource(file)
-              @base.rejectWithErrorString Promise.reject, error
-          
-          else
-            fs.close(fd, () =>
-              env.logger.debug __("%s: Speech resource for '%s' already exist. Reusing file.", @id, file)
-              
-              env.logger.info __("%s: Using cached speech resource for '%s'.", @id, @_data.text.parsed)
-              resolve file
+                env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_data.text.parsed)
+                resolve file
+              )
             )
-        )
+            .on('error', (error) =>
+              fs.unlink(file)
+              @base.rejectWithErrorString Promise.reject, error
+            )
+                
+          resRead = Request.get(resource)
+            .on('error', (error) =>
+              msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
+              env.logger.debug msg
+              @base.rejectWithErrorString Promise.reject, msg
+            )
+          resRead.pipe(fsWrite)
+              
+        ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
     destroy: () ->
