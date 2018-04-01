@@ -5,6 +5,9 @@ module.exports = (env) ->
   t = env.require('decl-api').types
   commons = require('pimatic-plugin-commons')(env)
   fs = require('fs')
+  Crypto = require('crypto')
+  Volume = require('pcm-volume')
+  Speaker = require('speaker')
   
   class TTSDevice extends env.devices.Device
     attributes:
@@ -12,11 +15,6 @@ module.exports = (env) ->
         description: "Voice synthesis language"
         type: t.string
         acronym: 'Language:'
-        discrete: true
-      speed:
-        description: "Voice speed"
-        type: t.number
-        acronym: 'Voice Speed:'
         discrete: true
       volume:
         description: "Voice volume"
@@ -40,11 +38,6 @@ module.exports = (env) ->
         returns:
           language:
             type: t.string
-      getSpeed:
-        description: "Returns the Voice speed"
-        returns:
-          speed:
-            type: t.number
       getVolume:
         description: "Returns the gain volume applied on the audio output stream"
         returns:
@@ -60,82 +53,76 @@ module.exports = (env) ->
         returns:
           language:
             type: t.number
-      convertToSpeech:
+      toSpeech:
         description: "Converts Text-to-Speech and outputs Audio"
         params:
           text:
-            type: t.string
+            type: t.object
       
+    generateResource: () -> throw new Error "Function \"generateResource\" is not implemented!"
+      
+    constructor: () ->
     
-    createSpeechResource: () ->
-      throw new Error "Function \"createSpeechResource\" is not implemented!"
-    
-    outputSpeech: () ->
-      throw new Error "Function \"outputSpeech\" is not implemented!"
+      @_options.language = @config.language ? 'en-GB'
+      @_options.volume = @config.volume ? 40
+      @_options.iterations = @config.repeat ? 1
+      @_options.interval = @config.interval ? 0
+      @_options.tmpDir = @config.tmpDir ? '/tmp'
+      @_options.enableCache = @config.enableCache ? true
+
+      @_data = null
       
-    constructor: (@config, lastState) ->
-      @id = @config.id
-      @name = @config.name
-      @_options = {
-        language: @config.language ? 'en-GB'
-        speed: @config.speed ? 100
-        volume: @config.volume ? 40
-        iterations: @config.repeat ? 1
-        interval: @config.interval ? 0
-      }
-      
-      @_latestText = null
-      @_volatileText = false
-      @_latestResource = null
-      @_fileResource = null
-      @_repetitions = []
-      @base = commons.base @, 'Plugin'
+      @base = commons.base @, @config.class
       
       super()
       
-    convertToSpeech: (data) =>
-      reject __("%s - message: '%s', TTS text provided is null or undefined.", @config.id, data.message.parsed) unless data?.message?.parsed?
-      @_setLatestText(data.message.parsed)
-      @_setVolatileText(data.message.hasVars)
+    toSpeech: (data) =>
+      @_setData(data)
       
       return new Promise( (resolve, reject) =>
-        @createSpeechResource(data.message).then( (resource) =>
-          @_setLatestResource(resource)
+        @base.rejectWithErrorString Promise.reject, __("%s - TTS text provided is null or undefined.", @config.id) unless @_data?.text?.parsed?
+        
+        @cacheResource().then( (resource) =>
+          @_setResource(resource)
           
           i = 0
           results = []
           playback = =>
             env.logger.debug __("%s: Starting audio output for iteration: %s", @id, i+1)
             
-            @outputSpeech(resource).then( (result) =>
-              results.push result
+            @_speechOut().then( (result) =>
               env.logger.debug __("%s: Finished audio output for iteration: %s", @id, i+1)
-              i++
               
+              results.push result
+              
+              i++
               if i < @_options.iterations
                 setTimeout(playback, @_options.interval*1000)
               
               else
-                @_removeResource(resource) if @_volatileText and @_fileResource?
+                if !@_data.text.static or !@_options.enableCache
+                  env.logger.debug __("%s: Static text: %s, Cache enabled: %s. Removing cached file: '%s'", @id, @_data.text.static, @_options.enableCache, @_data.resource)
+                  @_removeResource(@_data.resource)
+                
                 @emit('state', false)
+                
                 Promise.all(results).then( (result) =>
-                  resolve __("'%s' was spoken %s times", @_latestText, @_options.iterations)
+                  resolve __("'%s' was spoken %s times", @_data.text.parsed, @_options.iterations)
                 
                 ).catch(Promise.AggregateError, (error) =>
-                  reject __("'%s' was NOT spoken %s times. Error: %s", @_latestText, @_options.iterations, error)
+                  reject __("'%s' was NOT spoken %s times. Error: %s", @_data.text.parsed, @_options.iterations, error)
                 )
+                
             ).catch( (error) =>
               @emit('state', false)
-              reject error
+              @base.rejectWithErrorString Promise.reject, error
             )
           
           @emit('state', true)
           playback()
           
-        ).catch( (error) =>
-          reject __("Error while converting '%s' to speech: %s", @_latestText, error)
-        )
-      )
+        ).catch( (error) => @base.rejectWithErrorString Promise.reject, error)
+      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
     setVolume: (value) ->
       if value is @_options.volume then return
@@ -146,41 +133,107 @@ module.exports = (env) ->
       volMaxRel = 100
       volMaxAbs = 150
       return (value/volMaxRel*volMaxAbs/volMaxRel).toPrecision(2)
+    
+    cacheResource: () =>
+      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, @_data.text.parsed, @_options.language, @_options.speed)
       
-    getLanguage: -> Promise.resolve(@config.language)
-    getSpeed: -> Promise.resolve(@config.speed)
-    getVolume: -> Promise.resolve(@config.volume)
-    getRepeat: -> Promise.resolve(@config.repeat)
-    getInterval: -> Promise.resolve(@config.interval)
-    getLatestText: -> Promise.resolve(@_latestText)
+      return new Promise( (resolve, reject) =>
+        file = @_generateHashedFilename()
+        
+        fs.open(file, 'r', (error, fd) =>
+          if error
+            if error.code is "ENOENT"
+              env.logger.debug("%s: Creating speech resource file: '%s' for text: %s ", @id, file, @_data.text.parsed)
+              
+              env.logger.info("%s: Generating speech resource for '%s'", @id, @_data.text.parsed)
+              
+              return @generateResource(file)
+                .then( (resource) => resolve resource)
+                .catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+              
+            else
+              # File exists but cannot be read, delete it, and reject with error
+              env.logger.warning __("%s: %s already exists, but cannot be accessed. Attempting to remove. Error: %s", @id, file, error.code)
+              @_removeResource(file)
+              @base.rejectWithErrorString Promise.reject, error
+          
+          else
+            fs.close(fd, () =>
+              env.logger.debug __("%s: Speech resource for '%s' already exist. Reusing file.", @id, file)
+              
+              env.logger.info __("%s: Using cached speech resource for '%s'.", @id, @_data.text.parsed)
+              resolve file
+            )
+        )
+      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
-    _setLatestText: (value) ->
-      if @_latestText is value then return
-      @_latestText = value
-      @emit 'latestText', value
-    
-    _setVolatileText: (value) ->
-      if @_volatileText is value then return
-      @_volatileText = value
-      @emit 'volatileText', value
+    _speechOut:() =>
+      return new Promise( (resolve, reject) =>
+        
+        audioDecoder = new @_options.audioDecoder()
+        audioDecoder.on('format', (pcmFormat) =>
+          env.logger.debug pcmFormat
+          
+          speaker = new Speaker(pcmFormat)
+            .on('open', () =>
+              env.logger.debug __("%s: Audio output of '%s' started.", @id, @_data.text.parsed)
+            )
+        
+            .on('error', (error) =>
+              msg = __("%s: Audio output of '%s' failed. Error: %s", @id, @_data.text.parsed, error)
+              env.logger.debug msg
+              @base.rejectWithErrorString Promise.reject, error
+            )
+        
+            .on('finish', () =>
+              msg = __("%s: Audio output of '%s' completed successfully.", @id, @_data.text.parsed)
+              env.logger.debug msg
+              resolve msg
+            )
+          volControl = new Volume(@_pcmVolume(@_options.volume))
+          volControl.pipe(speaker)
+          audioDecoder.pipe(volControl)
+        )
+        streamData = fs.createReadStream(@_data.resource)
+        streamData.pipe(audioDecoder)
+        
+      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
       
-    _setLatestResource: (value) ->
-      if @_latestResource is value then return
-      @_latestResource = value
-      @emit 'latestResource', value
+    getLanguage: -> Promise.resolve(@_options.language)
+    getVolume: -> Promise.resolve(@_options.volume)
+    getRepeat: -> Promise.resolve(@_options.repeat)
+    getInterval: -> Promise.resolve(@_options.interval)
+    getText: -> Promise.resolve(@_data.text.parsed)
+    getStatic: -> Promise.resolve(@_data.text.static)
+    getResource: -> Promise.resolve(@_data.resource)
     
+    _setData: (obj) ->
+      @_data = obj
+      @emit('data', obj)
+    
+    _setResource: (value) ->
+      if @_data.resource is value then return
+      @_data.resource = value
+      @emit 'resource', value
+    
+    _generateHashedFilename: () -> 
+      md5 = Crypto.createHash('md5')
+      @_data.fileName = @_options.tmpDir + '/pimatic-tts_' + @id + '_' + md5.update(@_data.text.parsed).digest('hex') + '.' + @_options.audioFormat
+      return @_data.fileName
+      
     _removeResource: (resource) =>
-      env.logger.debug __("%s: TTS resource '%s' was created based on Pimatic variables. Removing cached file.", @id, resource)
       fs.open(resource, 'wx', (error, fd) =>
         if error and error.code is "EEXIST"
           fs.unlink(resource, (error) =>
             if error
               env.logger.warn __("%s: Removing resource file '%s' failed. Please remove manually. Reason: %s", @id, resource, error.code)
+              return error
           )
+        return true
       )
     
     destroy: () ->
-      @removeAllListeners('active')
+      @removeAllListeners('state')
       
       super()
 

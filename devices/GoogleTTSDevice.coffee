@@ -1,73 +1,79 @@
 module.exports = (env) ->
-
+  
+  _ = env.require 'lodash'
+  commons = require('pimatic-plugin-commons')(env)
+  t = env.require('decl-api').types
   Promise = env.require 'bluebird'
+  googleAPI = require('google-tts-api')
+  request = require('request')
+  lame = require('lame')
+  fs = require('fs')
   TTSDevice = require("./TTSDevice")(env)
-  GoogleAPI = require('google-tts-api')
-  Request = require('request')
-  Lame = require('lame')
-  Volume = require('pcm-volume')
-  Speaker = require('speaker')
   
   class GoogleTTSDevice extends TTSDevice
     
     constructor: (@config, lastState) ->
-      super(@config, lastState)
+      @id = @config.id
+      @name = @config.name
       
-    createSpeechResource: (message) =>
-      maxLengthGoogle = 200
+      @actions = _.cloneDeep @actions
+      @attributes = _.cloneDeep @attributes
       
-      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, message.parsed, @_options.language, @_options.speed)
-      return new Promise( (resolve, reject) =>
-        reject __("'%s' is %s characters. A maximum of 200 characters is allowed.", message.parsed, message.parsed.length) unless message.parsed.length < maxLengthGoogle
-        GoogleAPI(message.parsed, @_options.language, @_options.speed/100).then( (url) =>
-          resolve url
-        ).catch( (error) =>
-          reject __("Error obtaining TTS resource: %s", error)
-        )
-      )
-    
-    outputSpeech:(resource) =>
-      return new Promise( (resolve, reject) =>
+      @actions.getSpeed = {
+        description: "Returns the Voice speed"
+        returns:
+          speed:
+            type: t.number}
+      
+      @attributes.speed = {
+        description: "Voice speed"
+        type: t.number
+        acronym: 'Voice Speed:'
+        discrete: true}
         
-        audioDecoder = new Lame.Decoder()
-          .on('format', (pcmFormat) =>
-            env.logger.debug pcmFormat
-            
-            speaker = new Speaker(pcmFormat)
-              .on('open', () =>
-                env.logger.debug __("%s: Audio output of '%s' started.", @id, @_latestText)
-              )
-          
-              .on('error', (error) =>
-                msg = __("%s: Audio output of '%s' failed. Error: %s", @id, @_latestText, error)
-                env.logger.debug msg
-                reject msg
-              )
-          
-              .on('finish', () =>
-                msg = __("%s: Audio output of '%s' completed successfully.", @id, @_latestText)
-                env.logger.debug msg
-                resolve msg
-              )
-            volControl = new Volume(@_pcmVolume(@_options.volume))
-            volControl.pipe(speaker)
-            audioDecoder.pipe(volControl)
-          )
-          
-        Request
-          .get(resource)
-          .on('error', (error) =>
-            msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
-            env.logger.debug msg
-            reject msg
-          )
-          .pipe(audioDecoder)
-      )
+      @_options = {
+        speed: @config.speed ? 100
+        audioDecoder: lame.Decoder
+        audioFormat: 'mp3'
+        maxStringLenght: 200
+      }
+
+      super()
+    
+    getSpeed: -> Promise.resolve(@_options.speed)
+    
+    generateResource: (file) =>
       
+      return new Promise( (resolve, reject) =>
+        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_data.text.parsed.length) unless @_data.text.parsed.length < @_options.maxStringLenght
+        
+        googleAPI(@_data.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
+        
+          fsWrite = fs.createWriteStream(file)
+            .on('finish', () =>
+              fsWrite.close( () => 
+                      
+                env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_data.text.parsed)
+                resolve file
+              )
+            )
+            .on('error', (error) =>
+              fs.unlink(file)
+              @base.rejectWithErrorString Promise.reject, error
+            )
+                
+          resRead = request.get(resource)
+            .on('error', (error) =>
+              msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
+              env.logger.debug msg
+              @base.rejectWithErrorString Promise.reject, msg
+            )
+          resRead.pipe(fsWrite)
+              
+        ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+    
     destroy: () ->
       super()
   
   return GoogleTTSDevice
-  
-  
-        
