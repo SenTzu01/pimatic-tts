@@ -27,7 +27,8 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 - lame
 - Pico2Wave (For using offline Text-To-Speech)
 
-Raspbian / Debian example to install prerequisites:
+Raspbian / Debian example to install prerequisites
+
 Google TTS :
 ````sudo apt-get install alsa-utils mpg123 mpg321 lame libasound2-dev````
 
@@ -50,11 +51,11 @@ All:
   ...
 ````
 
-### Support
+## Support
 
-## Known issues:
+### Known issues:
 - Google cloud limits the length of a TTS text string to 200 characters (should be sufficient for most use cases)
 - Pimatic-tts (Google TTS API) requires an internet connection (which likely is the case already as you want to install the plugin)
 
-## Roadmap
+### Roadmap
 - Implement the ability to deliver speech through network connected devices (We should dream, shouldn't we)
