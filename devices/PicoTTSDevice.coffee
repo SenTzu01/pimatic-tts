@@ -29,7 +29,7 @@ module.exports = (env) ->
       
       return new Promise( (resolve, reject) =>
         
-        app = spawn(@_options.executable, @_options.arguments(file, @_data.text.parsed))
+        app = spawn(@_options.executable, @_options.arguments(file, @_conversionSettings.text.parsed))
         app.stdout.on( 'data', (data) =>
           env.logger.debug __("%s output: %s", @_options.executable, data)
         
@@ -41,7 +41,7 @@ module.exports = (env) ->
         app.on('close', (code) =>
           
           if (code is 0)
-            env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_data.text.parsed)
+            env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_conversionSettings.text.parsed)
             resolve file
           
           else

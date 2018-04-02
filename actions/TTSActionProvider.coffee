@@ -3,50 +3,76 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   M = env.matcher
   commons = require('pimatic-plugin-commons')(env)
+  t = env.require('decl-api').types
 
   class TTSActionProvider extends env.actions.ActionProvider
     
     constructor: (@framework, @config) ->
     
     parseAction: (input, context) =>
-      ttsInput = {
-        text:
-          input: null
-          static: false
-          parsed: null
-        volume: null
-        repeat: null
-        interval: null
-        device: null
-        resource: null
+      ttsConversion = {
+        device: null,
+        text: {
+          input: '',
+          static: false,
+          parsed: ''
+        },
+        speech: {
+          resource: '',
+          volume: null,
+          repeat: {
+            number: null,
+            interval: null
+          }
+        }
       }
       
-      SpeechDevices = _(@framework.deviceManager.devices).values().filter( (device) => device.hasAction("toSpeech") ).value()
+      SpeechDevices = _(@framework.deviceManager.devices).values().filter( (device) => 
+        device.hasAction("toSpeech")
+      ).value()
       
-      setDevice = (m, d) => ttsInput.device = d
       
       setText = (m, input) => 
-        ttsInput.text.input = input
-        ttsInput.text.static = !@framework.variableManager.extractVariables(input).length > 0
+        ttsConversion.text.input = input
+        ttsConversion.text.static = !@framework.variableManager.extractVariables(input).length > 0
       
-      setVolume = (m, v) =>     m.match( [" with volume "] ).matchNumber( (m, v) => ttsInput.volume = v )
-      setRepetition = (m, r) => m.match( [" repeating "] ).matchNumber( (m, r) => ttsInput.repeat = r ).match([" times"])
-      setIntervals = (m, w) =>  m.match( [" every "] ).matchNumber( (m, w) => ttsInput.interval = w ).match([" s", " seconds"])
+      setSpeechVolume = (m, v) =>
+        m.match([" with volume "]).matchNumber( (m, v) =>
+          ttsConversion.speech.volume = v
+        )
+      
+      setSpeechRepeatNumber = (m, r) => 
+        m.match([" repeating "]).matchNumber( (m, r) =>
+          ttsConversion.speech.repeat.number = r
+        ).match([" times"])
+      
+      setSpeechRepeatInterval = (m, w) => 
+        m.match([" every "]).matchNumber( (m, w) =>
+          ttsConversion.speech.repeat.interval = w
+        ).match([" s", " seconds"])
+      
+      setDevice = (m, d) => 
+        ttsConversion.device = d
+        ttsConversion.speech.volume = d.config?.volume?
+        ttsConversion.speech.repeat.number = d.config?.repeat
+        ttsConversion.speech.repeat.interval = d.config?.interval
 
       m = M(input, context)
         .match(["speak ", "Speak ", "say ", "Say "])
         .matchStringWithVars(setText)
         .match(" using ")
         .matchDevice(SpeechDevices, setDevice)
-        .optional( (m, input) => m.inAnyOrder( [setVolume, setRepetition, setIntervals] ) )
+        .optional(setSpeechVolume)
+        .optional(setSpeechRepeatNumber)
+        .optional(setSpeechRepeatInterval)
 
-        
       if m.hadMatch()
+        ttsConversion.speech.repeat.interval = 0 if ttsConversion.speech.repeat.number < 2
         match = m.getFullMatch()
         return {
           token: match
           nextInput: input.substring(match.length)
-          actionHandler: new TTSActionHandler(@framework, @config, ttsInput)
+          actionHandler: new TTSActionHandler(@framework, @config, ttsConversion)
         }
       else
         return null

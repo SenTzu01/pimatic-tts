@@ -2,8 +2,8 @@
   "name": "pimatic-tts",
   "description": "Pimatic plugin providing Text-to-Speech capability",
   "author": {
-    "name": "Danny Wigmans (SenTzu01)",
-    "url": "https://github.com/SenTzu01"
+    "name": "Danny Wigmans",
+    "url": "SenTzu01"
   },
   "main": "tts.coffee",
   "files": [
@@ -39,8 +39,8 @@
   "license": "AGPL-3.0",
   "maintainers": [
     {
-      "name": "SenTzu01",
-      "url": "https://github.com/SenTzu01"
+      "name": "sentzu01",
+      "email": "sentzu01@gmail.com"
     }
   ],
   "configSchema": "tts-config-schema.coffee",
@@ -58,5 +58,27 @@
     "node": ">0.8.x",
     "npm": ">1.1.x"
   },
-  "readmeFilename": "README.md"
+  "gitHead": "44bd52c061eadbde2b16d85dd9db77848879bb79",
+  "_id": "pimatic-tts@0.0.5",
+  "scripts": {},
+  "_shasum": "8edb4b92d1f941c632be55038cd822db4b332fb0",
+  "_from": "pimatic-tts@0.0.5",
+  "_npmVersion": "2.15.11",
+  "_nodeVersion": "4.8.7",
+  "_npmUser": {
+    "name": "sentzu01",
+    "email": "sentzu01@gmail.com"
+  },
+  "dist": {
+    "shasum": "8edb4b92d1f941c632be55038cd822db4b332fb0",
+    "tarball": "https://registry.npmjs.org/pimatic-tts/-/pimatic-tts-0.0.5.tgz",
+    "fileCount": 14,
+    "unpackedSize": 72199
+  },
+  "directories": {},
+  "_npmOperationalInternal": {
+    "host": "s3://npm-registry-packages",
+    "tmp": "tmp/pimatic-tts_0.0.5_1522628463247_0.3148869833117298"
+  },
+  "_resolved": "https://registry.npmjs.org/pimatic-tts/-/pimatic-tts-0.0.5.tgz"
 }

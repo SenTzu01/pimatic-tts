@@ -45,15 +45,15 @@ module.exports = (env) ->
     generateResource: (file) =>
       
       return new Promise( (resolve, reject) =>
-        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_data.text.parsed.length) unless @_data.text.parsed.length < @_options.maxStringLenght
+        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_conversionSettings.text.parsed.length) unless @_conversionSettings.text.parsed.length < @_options.maxStringLenght
         
-        googleAPI(@_data.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
+        googleAPI(@_conversionSettings.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
         
           fsWrite = fs.createWriteStream(file)
             .on('finish', () =>
               fsWrite.close( () => 
                       
-                env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_data.text.parsed)
+                env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_conversionSettings.text.parsed)
                 resolve file
               )
             )
@@ -61,7 +61,7 @@ module.exports = (env) ->
               fs.unlink(file)
               @base.rejectWithErrorString Promise.reject, error
             )
-                
+          
           resRead = request.get(resource)
             .on('error', (error) =>
               msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)

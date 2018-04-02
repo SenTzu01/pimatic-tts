@@ -65,27 +65,23 @@ module.exports = (env) ->
       @base = commons.base @, @config.class
       
       @_options.language = @config.language ? 'en-GB'
-      @_options.volume = @config.volume ? 40
-      @_options.repeat = @config.repeat ? 1
-      @_options.interval = @config.interval ? 0
+      #@_options.volume = @config.volume ? 40
+      #@_options.repeat = @config.repeat ? 1
+      #@_options.interval = @config.interval ? 0
       @_options.tmpDir = @config.tmpDir ? '/tmp'
       @_options.enableCache = @config.enableCache ? true
-
-      @_data = null
+      @_options.volume = { setting: @config.volume, max: 150, min: 1, maxRel: 100 }
       
       super()
       
-    toSpeech: (data) =>
-      @_setData(data)
+    toSpeech: (ttsSettings) =>
+      @_setConversionSettings(ttsSettings)
       
       return new Promise( (resolve, reject) =>
-        @base.rejectWithErrorString Promise.reject, __("%s - TTS text provided is null or undefined.", @config.id) unless @_data?.text?.parsed?
+        repeat = @_conversionSettings.speech.repeat
+        @base.rejectWithErrorString Promise.reject, __("%s - TTS text provided is null or undefined.", @config.id) unless @_conversionSettings?.text?.parsed?
         
-        @cacheResource().then( (resource) =>
-          @_setResource(resource)
-          
-          repeat = @_data.repeat ? @_options.repeat
-          interval = (@_data.interval ? @_options.interval)*1000
+        @_cacheResource().then( (resource) =>
           
           i = 0
           results = []
@@ -98,21 +94,21 @@ module.exports = (env) ->
               results.push result
               
               i++
-              if i < repeat
-                setTimeout(playback, interval)
+              if i < repeat.number
+                setTimeout(playback, repeat.interval*1000)
               
               else
-                if !@_data.text.static or !@_options.enableCache
-                  env.logger.debug __("%s: Static text: %s, Cache enabled: %s. Removing cached file: '%s'", @id, @_data.text.static, @_options.enableCache, @_data.resource)
-                  @_removeResource(@_data.resource)
+                if !@_conversionSettings.text.static or !@_options.enableCache
+                  env.logger.debug __("%s: Static text: %s, Cache enabled: %s. Removing cached file: '%s'", @id, @_conversionSettings.text.static, @_options.enableCache, resource)
+                  @_removeCache()
                 
                 @emit('state', false)
                 
                 Promise.all(results).then( (result) =>
-                  resolve __("'%s' was spoken %s times", @_data.text.parsed, repeat)
+                  resolve __("'%s' was spoken %s times", @_conversionSettings.text.parsed, repeat.number)
                 
                 ).catch(Promise.AggregateError, (error) =>
-                  reject __("'%s' was NOT spoken %s times. Error: %s", @_data.text.parsed, repeat, error)
+                  reject __("'%s' was NOT spoken %s times. Error: %s", @_conversionSettings.text.parsed, repeat.number, error)
                 )
                 
             ).catch( (error) =>
@@ -126,16 +122,6 @@ module.exports = (env) ->
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error)
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
-    setVolume: (value) ->
-      if value is @_options.volume then return
-      @_options.volume = value
-      @emit('volume', value)
-      
-    _pcmVolume: (value) ->
-      volMaxRel = 100
-      volMaxAbs = 150
-      return (value/volMaxRel*volMaxAbs/volMaxRel).toPrecision(2)
-    
     setVolumeLevel: (volume) ->
       @_volControl?.setVolume(@_pcmVolume(volume))
     
@@ -148,93 +134,129 @@ module.exports = (env) ->
           
           speaker = new Speaker(pcmFormat)
             .on('open', () =>
-              env.logger.debug __("%s: Audio output of '%s' started.", @id, @_data.text.parsed)
+              env.logger.debug __("%s: Audio output of '%s' started.", @id, @_conversionSettings.text.parsed)
             )
         
             .on('error', (error) =>
-              msg = __("%s: Audio output of '%s' failed. Error: %s", @id, @_data.text.parsed, error)
+              msg = __("%s: Audio output of '%s' failed. Error: %s", @id, @_conversionSettings.text.parsed, error)
               env.logger.debug msg
               @base.rejectWithErrorString Promise.reject, error
             )
         
             .on('finish', () =>
-              msg = __("%s: Audio output of '%s' completed successfully.", @id, @_data.text.parsed)
+              msg = __("%s: Audio output of '%s' completed successfully.", @id, @_conversionSettings.text.parsed)
               env.logger.debug msg
               resolve msg
             )
-          @_volControl = new Volume(@_pcmVolume(@_data.volume ? @_options.volume))
+          @_volControl = new Volume(@_pcmVolume(@_conversionSettings.speech.volume))
           @_volControl.pipe(speaker)
           audioDecoder.pipe(@_volControl)
         )
-        streamData = fs.createReadStream(@_data.resource)
-        streamData.pipe(audioDecoder)
+        @getCache().then( (resource) =>
+          fs.createReadStream(resource).pipe(audioDecoder)
+        )
         
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
-    cacheResource: () =>
-      env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, @_data.text.parsed, @_options.language, @_options.speed)
+    _cacheResource: () =>
+      env.logger.debug __("%s: Getting TTS Resource for text: '%s', language: '%s'", @id, @_conversionSettings.text.parsed, @_options.language)
       
       return new Promise( (resolve, reject) =>
-        file = @_generateHashedFilename()
+        @_generateHashedFilename().then( @getCache()).then( (cache) =>
         
-        fs.open(file, 'r', (error, fd) =>
-          if error
-            if error.code is "ENOENT"
-              env.logger.debug("%s: Creating speech resource file: '%s' for text: %s ", @id, file, @_data.text.parsed)
-              
-              env.logger.info("%s: Generating speech resource for '%s'", @id, @_data.text.parsed)
-              
-              return @generateResource(file)
-                .then( (resource) => resolve resource)
-                .catch( (error) => @base.rejectWithErrorString Promise.reject, error )
-              
+          fs.open(cache, 'r', (error, fd) =>
+            if error
+              if error.code is "ENOENT"
+                env.logger.debug("%s: Creating speech resource cache: '%s' for text: %s ", @id, cache, @_conversionSettings.text.parsed)
+                
+                env.logger.info("%s: Generating speech resource for '%s'", @id, @_conversionSettings.text.parsed)
+                
+                return @generateResource(cache).then( (resource) => 
+                  @_setResource(resource)
+                  resolve resource
+                ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+                
+              else
+                # Cache file exists but cannot be read, delete it, and reject with error
+                env.logger.warning __("%s: Cached resource exists, but cannot be accessed. Attempting to remove. Error: %s", @id, error.code)
+                @_removeCache()
+                @base.rejectWithErrorString Promise.reject, error
+            
             else
-              # File exists but cannot be read, delete it, and reject with error
-              env.logger.warning __("%s: %s already exists, but cannot be accessed. Attempting to remove. Error: %s", @id, file, error.code)
-              @_removeResource(file)
-              @base.rejectWithErrorString Promise.reject, error
-          
-          else
-            fs.close(fd, () =>
-              env.logger.debug __("%s: Speech resource for '%s' already exist. Reusing file.", @id, file)
-              
-              env.logger.info __("%s: Using cached speech resource for '%s'.", @id, @_data.text.parsed)
-              resolve file
-            )
+              fs.close(fd, () =>
+                env.logger.debug __("%s: Speech resource for '%s' already exist. Reusing cache.", @id, cache)
+                
+                env.logger.info __("%s: Using cached speech resource for '%s'.", @id, @_conversionSettings.text.parsed)
+                resolve cache
+              )
+          )
         )
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
     getLanguage: -> Promise.resolve(@_options.language)
-    getVolume: -> Promise.resolve(@_options.volume)
-    getRepeat: -> Promise.resolve(@_options.repeat)
-    getInterval: -> Promise.resolve(@_options.interval)
-    getText: -> Promise.resolve(@_data.text.parsed)
-    getStatic: -> Promise.resolve(@_data.text.static)
-    getResource: -> Promise.resolve(@_data.resource)
-    
-    _setData: (obj) ->
-      @_data = obj
-      @emit('data', obj)
+    getTempDir: -> Promise.resolve(@_options.tmpDir)
+    isCacheEnabled: -> Promise.resolve(@_options.enableCache)
+    getVolume: -> Promise.resolve(@_conversionSettings?.speech?.volume)
+    getRepeat: -> Promise.resolve(@_conversionSettings?.speech?.repeat?.number)
+    getInterval: -> Promise.resolve(@_conversionSettings?.speech?.repeat?.interval)
+    getText: -> Promise.resolve(@_conversionSettings?.text?.parsed)
+    getStatic: -> Promise.resolve(@_conversionSettings?.text?.static)
+    getResource: -> Promise.resolve(@_conversionSettings?.speech?.resource)
+    getCache: -> Promise.resolve(@_conversionSettings?.speech?.cache)
     
     _setResource: (value) ->
-      if @_data.resource is value then return
-      @_data.resource = value
+      if value is @_conversionSettings.speech.resource then return
+      @_conversionSettings.speech.resource = value
       @emit 'resource', value
     
+    setVolume: (value) ->
+      if value is @_conversionSettings.speech.volume then return
+      @_conversionSettings.speech.volume = value
+      @emit('volume', value)
+    
+    setRepeat: (value) ->
+      if value is @_conversionSettings.speech.repeat.number then return
+      @_conversionSettings.speech.repeat.number = value
+      @emit('repeat', value)
+    
+    setIntervals: (value) ->
+      if value is @_conversionSettings.speech.repeat.interval then return
+      @_conversionSettings.speech.repeat.interval = value
+      @emit('interval', value)
+    
+    _setConversionSettings: (settings) ->
+      @_conversionSettings = settings
+      @emit('conversionSettings', settings)
+    
+    _setCache: (value) ->
+      if value is @_conversionSettings.speech.cache then return
+      @_conversionSettings.speech.cache = value
+      @emit 'cache', value
+      
+    _pcmVolume: () ->
+      volume = @_conversionSettings?.speech?.volume ? 100
+      if volume < @_options?.volume?.min then volume = @_options?.volume?.min ? 1 
+      if volume > @_options?.volume?.max then volume = @_options?.volume?.max ? 100
+      
+      return (volume/@_options?.volume?.maxRel*@_options?.volume?.max/@_options?.volume?.maxRel).toPrecision(2)
+      
     _generateHashedFilename: () -> 
       md5 = Crypto.createHash('md5')
-      @_data.fileName = @_options.tmpDir + '/pimatic-tts_' + @id + '_' + md5.update(@_data.text.parsed).digest('hex') + '.' + @_options.audioFormat
-      return @_data.fileName
+      cache = @_options.tmpDir + '/pimatic-tts_' + @id + '_' + md5.update(@_conversionSettings.text.parsed).digest('hex') + '.' + @_options.audioFormat
+      @_setCache(cache)
+      return Promise.resolve cache
       
-    _removeResource: (resource) =>
-      fs.open(resource, 'wx', (error, fd) =>
-        if error and error.code is "EEXIST"
-          fs.unlink(resource, (error) =>
-            if error
-              env.logger.warn __("%s: Removing resource file '%s' failed. Please remove manually. Reason: %s", @id, resource, error.code)
-              return error
-          )
-        return true
+    _removeCache: () =>
+      @getCache().then( (resource) =>
+        fs.open(resource, 'wx', (error, fd) =>
+          if error and error.code is "EEXIST"
+            fs.unlink(resource, (error) =>
+              if error
+                env.logger.warn __("%s: Removing resource file '%s' failed. Please remove manually. Reason: %s", @id, resource, error.code)
+                return error
+            )
+          return true
+        )
       )
     
     destroy: () ->
