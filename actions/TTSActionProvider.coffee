@@ -10,29 +10,50 @@ module.exports = (env) ->
     
     parseAction: (input, context) =>
       ttsInput = {
-        text: {
+        text:
           input: null
           static: false
           parsed: null
-        }
+        volume: null
+        repeat: null
+        interval: null
         device: null
         resource: null
       }
       
-      SpeechDevices = _(@framework.deviceManager.devices).values().filter(
-        (device) => device.hasAction("toSpeech")
-      ).value()
+      SpeechDevices = _(@framework.deviceManager.devices).values().filter( (device) => device.hasAction("toSpeech") ).value()
       
       setDevice = (m, d) => ttsInput.device = d
+      
       setText = (m, input) => 
         ttsInput.text.input = input
         ttsInput.text.static = !@framework.variableManager.extractVariables(input).length > 0
-        
+      
+      setVolume = (m, v) => 
+        m.match([" with volume "]).matchNumber( (m, v) =>
+          ttsInput.volume = v
+        )
+      
+      setRepetition = (m, r) => 
+        m.match([" repeating "]).matchNumber( (m, r) =>
+          ttsInput.repeat = r
+        ).match([" times"])
+      
+      _setInterval = (m, w) => 
+        m.match([" every "]).matchNumber( (m, w) =>
+          ttsInput.interval = w
+        ).match([" s", " seconds"])
+          
+
       m = M(input, context)
         .match(["speak ", "Speak ", "say ", "Say "])
         .matchStringWithVars(setText)
         .match(" using ")
         .matchDevice(SpeechDevices, setDevice)
+        .optional(setVolume)
+        .optional(setRepetition)
+        .optional(_setInterval)
+
         
       if m.hadMatch()
         match = m.getFullMatch()
