@@ -3,12 +3,12 @@ This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 
 ## Features
 - Provides a rule action allowing Pimatic to speak text over connected speakers
-- Currently supports the cloud based Google TTS and/or locally installed Pico2Wave on Linux
-- Static speech resources can be cached on the local filesystem (Device config)
-- Speech resources where the text input contains Pimatic variables will not be cached
+- Support for Cloud based Google TTS (support for a large amount of languages)
+- Support for Pico2Wave on Linux (offline availability, but with limited language support)
+- Static speech resources (not containing Pimatic variables/expressions) can be cached on the local filesystem (Device config)
 - Define multiple devices for different TTS engines and/or output config
 - Override device config values for Volume, Repeat and Repeat Interval on a rule by rule basis
-- Audio output to connected audio devices is achieved by streaming PCM audio to the ALSA backend on Debian/Ubuntu
+- Audio output to connected audio devices is achieved by streaming PCM audio to the ALSA backend
 
 ## Action syntax and examples: 
 
