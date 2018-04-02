@@ -29,30 +29,16 @@ module.exports = (env) ->
         ttsInput.text.input = input
         ttsInput.text.static = !@framework.variableManager.extractVariables(input).length > 0
       
-      setVolume = (m, v) => 
-        m.match([" with volume "]).matchNumber( (m, v) =>
-          ttsInput.volume = v
-        )
-      
-      setRepetition = (m, r) => 
-        m.match([" repeating "]).matchNumber( (m, r) =>
-          ttsInput.repeat = r
-        ).match([" times"])
-      
-      _setInterval = (m, w) => 
-        m.match([" every "]).matchNumber( (m, w) =>
-          ttsInput.interval = w
-        ).match([" s", " seconds"])
-          
+      setVolume = (m, v) =>     m.match( [" with volume "] ).matchNumber( (m, v) => ttsInput.volume = v )
+      setRepetition = (m, r) => m.match( [" repeating "] ).matchNumber( (m, r) => ttsInput.repeat = r ).match([" times"])
+      setIntervals = (m, w) =>  m.match( [" every "] ).matchNumber( (m, w) => ttsInput.interval = w ).match([" s", " seconds"])
 
       m = M(input, context)
         .match(["speak ", "Speak ", "say ", "Say "])
         .matchStringWithVars(setText)
         .match(" using ")
         .matchDevice(SpeechDevices, setDevice)
-        .optional(setVolume)
-        .optional(setRepetition)
-        .optional(_setInterval)
+        .optional( (m, input) => m.inAnyOrder( [setVolume, setRepetition, setIntervals] ) )
 
         
       if m.hadMatch()
