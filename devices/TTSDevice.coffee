@@ -62,17 +62,16 @@ module.exports = (env) ->
     generateResource: () -> throw new Error "Function \"generateResource\" is not implemented!"
       
     constructor: () ->
-    
+      @base = commons.base @, @config.class
+      
       @_options.language = @config.language ? 'en-GB'
       @_options.volume = @config.volume ? 40
-      @_options.iterations = @config.repeat ? 1
+      @_options.repeat = @config.repeat ? 1
       @_options.interval = @config.interval ? 0
       @_options.tmpDir = @config.tmpDir ? '/tmp'
       @_options.enableCache = @config.enableCache ? true
 
       @_data = null
-      
-      @base = commons.base @, @config.class
       
       super()
       
@@ -85,6 +84,9 @@ module.exports = (env) ->
         @cacheResource().then( (resource) =>
           @_setResource(resource)
           
+          repeat = @_data.repeat ? @_options.repeat
+          interval = (@_data.interval ? @_options.interval)*1000
+          
           i = 0
           results = []
           playback = =>
@@ -96,8 +98,8 @@ module.exports = (env) ->
               results.push result
               
               i++
-              if i < @_options.iterations
-                setTimeout(playback, @_options.interval*1000)
+              if i < repeat
+                setTimeout(playback, interval)
               
               else
                 if !@_data.text.static or !@_options.enableCache
@@ -107,10 +109,10 @@ module.exports = (env) ->
                 @emit('state', false)
                 
                 Promise.all(results).then( (result) =>
-                  resolve __("'%s' was spoken %s times", @_data.text.parsed, @_options.iterations)
+                  resolve __("'%s' was spoken %s times", @_data.text.parsed, repeat)
                 
                 ).catch(Promise.AggregateError, (error) =>
-                  reject __("'%s' was NOT spoken %s times. Error: %s", @_data.text.parsed, @_options.iterations, error)
+                  reject __("'%s' was NOT spoken %s times. Error: %s", @_data.text.parsed, repeat, error)
                 )
                 
             ).catch( (error) =>
@@ -133,6 +135,41 @@ module.exports = (env) ->
       volMaxRel = 100
       volMaxAbs = 150
       return (value/volMaxRel*volMaxAbs/volMaxRel).toPrecision(2)
+    
+    setVolumeLevel: (volume) ->
+      @_volControl?.setVolume(@_pcmVolume(volume))
+    
+    _speechOut:() =>
+      return new Promise( (resolve, reject) =>
+        
+        audioDecoder = new @_options.audioDecoder()
+        audioDecoder.on('format', (pcmFormat) =>
+          env.logger.debug pcmFormat
+          
+          speaker = new Speaker(pcmFormat)
+            .on('open', () =>
+              env.logger.debug __("%s: Audio output of '%s' started.", @id, @_data.text.parsed)
+            )
+        
+            .on('error', (error) =>
+              msg = __("%s: Audio output of '%s' failed. Error: %s", @id, @_data.text.parsed, error)
+              env.logger.debug msg
+              @base.rejectWithErrorString Promise.reject, error
+            )
+        
+            .on('finish', () =>
+              msg = __("%s: Audio output of '%s' completed successfully.", @id, @_data.text.parsed)
+              env.logger.debug msg
+              resolve msg
+            )
+          @_volControl = new Volume(@_pcmVolume(@_data.volume ? @_options.volume))
+          @_volControl.pipe(speaker)
+          audioDecoder.pipe(@_volControl)
+        )
+        streamData = fs.createReadStream(@_data.resource)
+        streamData.pipe(audioDecoder)
+        
+      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
     cacheResource: () =>
       env.logger.debug __("%s: Getting TTS Resource for text: %s, language: %s, speed: %s", @id, @_data.text.parsed, @_options.language, @_options.speed)
@@ -167,38 +204,6 @@ module.exports = (env) ->
         )
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
-    _speechOut:() =>
-      return new Promise( (resolve, reject) =>
-        
-        audioDecoder = new @_options.audioDecoder()
-        audioDecoder.on('format', (pcmFormat) =>
-          env.logger.debug pcmFormat
-          
-          speaker = new Speaker(pcmFormat)
-            .on('open', () =>
-              env.logger.debug __("%s: Audio output of '%s' started.", @id, @_data.text.parsed)
-            )
-        
-            .on('error', (error) =>
-              msg = __("%s: Audio output of '%s' failed. Error: %s", @id, @_data.text.parsed, error)
-              env.logger.debug msg
-              @base.rejectWithErrorString Promise.reject, error
-            )
-        
-            .on('finish', () =>
-              msg = __("%s: Audio output of '%s' completed successfully.", @id, @_data.text.parsed)
-              env.logger.debug msg
-              resolve msg
-            )
-          volControl = new Volume(@_pcmVolume(@_options.volume))
-          volControl.pipe(speaker)
-          audioDecoder.pipe(volControl)
-        )
-        streamData = fs.createReadStream(@_data.resource)
-        streamData.pipe(audioDecoder)
-        
-      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
-      
     getLanguage: -> Promise.resolve(@_options.language)
     getVolume: -> Promise.resolve(@_options.volume)
     getRepeat: -> Promise.resolve(@_options.repeat)
