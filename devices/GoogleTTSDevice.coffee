@@ -45,15 +45,19 @@ module.exports = (env) ->
     generateResource: (file) =>
       
       return new Promise( (resolve, reject) =>
+        env.logger.debug __("@_conversionSettings.text.parsed.length: %s", @_conversionSettings.text.parsed.length)
         @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_conversionSettings.text.parsed.length) unless @_conversionSettings.text.parsed.length < @_options.maxStringLenght
         
+        env.logger.debug __("@_options.language: %s", @_options.language)
+        env.logger.debug __("@_options.speed: %s. Calculated speed: %s", @_options.speed, @_options.speed/100)
         googleAPI(@_conversionSettings.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
-        
+          env.logger.debug __("resource: %s", resource)
           fsWrite = fs.createWriteStream(file)
             .on('finish', () =>
               fsWrite.close( () => 
                       
                 env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_conversionSettings.text.parsed)
+                env.logger.debug __("file: %s", file)
                 resolve file
               )
             )

@@ -117,6 +117,8 @@ module.exports = (env) ->
             )
           
           @emit('state', true)
+          env.logger.debug __("@_conversionSettings.speech.repeat:", @_conversionSettings.speech.repeat)
+          env.logger.debug __("@_conversionSettings.speech.interval:", @_conversionSettings.speech.interval)
           playback()
           
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error)
@@ -148,6 +150,8 @@ module.exports = (env) ->
               env.logger.debug msg
               resolve msg
             )
+            
+          env.logger.debug __("@_conversionSettings.speech.volume:", @_conversionSettings.speech.volume)
           @_volControl = new Volume(@_pcmVolume(@_conversionSettings.speech.volume))
           @_volControl.pipe(speaker)
           audioDecoder.pipe(@_volControl)

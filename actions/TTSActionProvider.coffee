@@ -10,8 +10,8 @@ module.exports = (env) ->
     constructor: (@framework, @config) ->
     
     parseAction: (input, context) =>
-      ttsConversion = {
-        device: null,
+      device = null
+      ttsSettings = {
         text: {
           input: '',
           static: false,
@@ -33,29 +33,29 @@ module.exports = (env) ->
       
       
       setText = (m, input) => 
-        ttsConversion.text.input = input
-        ttsConversion.text.static = !@framework.variableManager.extractVariables(input).length > 0
+        ttsSettings.text.input = input
+        ttsSettings.text.static = !@framework.variableManager.extractVariables(input).length > 0
       
       setSpeechVolume = (m, v) =>
         m.match([" with volume "]).matchNumber( (m, v) =>
-          ttsConversion.speech.volume = v
+          ttsSettings.speech.volume = v
         )
       
       setSpeechRepeatNumber = (m, r) => 
         m.match([" repeating "]).matchNumber( (m, r) =>
-          ttsConversion.speech.repeat.number = r
+          ttsSettings.speech.repeat.number = r
         ).match([" times"])
       
       setSpeechRepeatInterval = (m, w) => 
         m.match([" every "]).matchNumber( (m, w) =>
-          ttsConversion.speech.repeat.interval = w
+          ttsSettings.speech.repeat.interval = w
         ).match([" s", " seconds"])
       
       setDevice = (m, d) => 
-        ttsConversion.device = d
-        ttsConversion.speech.volume = d.config?.volume?
-        ttsConversion.speech.repeat.number = d.config?.repeat
-        ttsConversion.speech.repeat.interval = d.config?.interval
+        device = d
+        ttsSettings.speech.volume = d.config?.volume
+        ttsSettings.speech.repeat.number = d.config?.repeat
+        ttsSettings.speech.repeat.interval = d.config?.interval
 
       m = M(input, context)
         .match(["speak ", "Speak ", "say ", "Say "])
@@ -67,39 +67,39 @@ module.exports = (env) ->
         .optional(setSpeechRepeatInterval)
 
       if m.hadMatch()
-        ttsConversion.speech.repeat.interval = 0 if ttsConversion.speech.repeat.number < 2
+        ttsSettings.speech.repeat.interval = 0 if ttsSettings.speech.repeat.number < 2
         match = m.getFullMatch()
         return {
           token: match
           nextInput: input.substring(match.length)
-          actionHandler: new TTSActionHandler(@framework, @config, ttsConversion)
+          actionHandler: new TTSActionHandler(@framework, @config, device, ttsSettings)
         }
       else
         return null
   
   class TTSActionHandler extends env.actions.ActionHandler
   
-    constructor: (@framework, @config, @ttsActionData) ->
+    constructor: (@framework, @config, @_device, @_ttsSettings) ->
       @base = commons.base @, 'Pimatic-TTS-TTSActionProvider'
       super()
       
     setup: () ->
-      @dependOnDevice(@ttsActionData.device)
+      @dependOnDevice(@_device)
       super()
     
     executeAction: (simulate) =>
       return new Promise( (resolve, reject) =>
-        return @framework.variableManager.evaluateStringExpression(@ttsActionData.text.input).then( (text) =>
-          @ttsActionData.text.parsed = text
+        return @framework.variableManager.evaluateStringExpression(@_ttsSettings.text.input).then( (text) =>
+          @_ttsSettings.text.parsed = text
           
-          env.logger.debug __("TTSActionHandler - Device: '%s', Text: '%s'", @ttsActionData.device.id, @ttsActionData.text.parsed)
+          env.logger.debug __("TTSActionHandler - Device: '%s', Text: '%s'", @_device.id, @_ttsSettings.text.parsed)
           
           if simulate
-            return __("would convert Text to Speech: \"%s\"", @ttsActionData.text.parsed)
+            return __("would convert Text to Speech: \"%s\"", @_ttsSettings.text.parsed)
           
           else
             
-            return @ttsActionData.device.toSpeech(@ttsActionData).then( (result) =>
+            return @_device.toSpeech(@_ttsSettings).then( (result) =>
               env.logger.debug result
               resolve result
               
