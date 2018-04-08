@@ -19,64 +19,76 @@ module.exports = (env) ->
       @actions = _.cloneDeep @actions
       @attributes = _.cloneDeep @attributes
       
-      @actions.getSpeed = {
+      @addAction('getSpeed', {
         description: "Returns the Voice speed"
         returns:
           speed:
-            type: t.number}
+            type: t.number})
       
-      @attributes.speed = {
+      @addAttribute('speed',{
         description: "Voice speed"
         type: t.number
         acronym: 'Voice Speed:'
-        discrete: true}
-        
-      @_options = {
-        speed: @config.speed ? 100
-        audioDecoder: lame.Decoder
-        audioFormat: 'mp3'
-        maxStringLenght: 200
-      }
-
+        discrete: true})
+      
       super()
     
+    _setup: ->
+      @_setAudioFormat('mp3')
+      @_setAudioDecoder(lame.Decoder)
+      @_setSpeed(@config.speed)
+      @_setMaxStringLength(200)
+      
     getSpeed: -> Promise.resolve(@_options.speed)
     
-    generateResource: (file) =>
+    generateResource: (file, text) =>
       
       return new Promise( (resolve, reject) =>
-        env.logger.debug __("@_conversionSettings.text.parsed.length: %s", @_conversionSettings.text.parsed.length)
-        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_conversionSettings.text.parsed.length) unless @_conversionSettings.text.parsed.length < @_options.maxStringLenght
+        env.logger.debug __("@_conversionSettings.text.parsed.length: %s", text.length)
+        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_conversionSettings.text.parsed.length) unless text.length < @_options.maxStringLenght
         
         env.logger.debug __("@_options.language: %s", @_options.language)
-        env.logger.debug __("@_options.speed: %s. Calculated speed: %s", @_options.speed, @_options.speed/100)
-        googleAPI(@_conversionSettings.text.parsed, @_options.language, @_options.speed/100).then( (resource) =>
-          env.logger.debug __("resource: %s", resource)
-          fsWrite = fs.createWriteStream(file)
-            .on('finish', () =>
-              fsWrite.close( () => 
-                      
-                env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, @_conversionSettings.text.parsed)
-                env.logger.debug __("file: %s", file)
-                resolve file
+        @getSpeed().then( (speed) =>
+          env.logger.debug __("@_options.speed: %s. Calculated speed: %s", @_options.speed, @_options.speed/100)
+          googleAPI(text, @_options.language, @_options.speed/100).then( (resource) =>
+            env.logger.debug __("resource: %s", resource)
+            
+            resRead = request.get(resource)
+              .on('error', (error) =>
+                msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
+                env.logger.debug msg
+                @base.rejectWithErrorString Promise.reject, msg
               )
-            )
-            .on('error', (error) =>
-              fs.unlink(file)
-              @base.rejectWithErrorString Promise.reject, error
-            )
-          
-          resRead = request.get(resource)
-            .on('error', (error) =>
-              msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
-              env.logger.debug msg
-              @base.rejectWithErrorString Promise.reject, msg
-            )
-          resRead.pipe(fsWrite)
               
+            fsWrite = fs.createWriteStream(file)
+              .on('finish', () =>
+                fsWrite.close( () => 
+                        
+                  env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, text)
+                  env.logger.debug __("file: %s", file)
+                  resolve file
+                )
+              )
+              .on('error', (error) =>
+                fs.unlink(file)
+                @base.rejectWithErrorString Promise.reject, error
+              )
+            resRead.pipe(fsWrite)
+          )
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
+    _setSpeed: (value) ->
+      if value is @_options.speed then return
+      @_options.speed = value
+      @emit 'speed', value
+    
+    _setMaxStringLength: (value) ->
+      if value is @_options.maxStringLenght then return
+      @_options.maxStringLength = value
+      @emit 'maxStringLength', value
+    
+
     destroy: () ->
       super()
   

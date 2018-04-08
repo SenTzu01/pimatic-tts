@@ -63,15 +63,14 @@ module.exports = (env) ->
       
     constructor: () ->
       @base = commons.base @, @config.class
+      @_options = {}
       
-      @_options.language = @config.language ? 'en-GB'
-      #@_options.volume = @config.volume ? 40
-      #@_options.repeat = @config.repeat ? 1
-      #@_options.interval = @config.interval ? 0
-      @_options.tmpDir = @config.tmpDir ? '/tmp'
-      @_options.enableCache = @config.enableCache ? true
+      @_setLanguage(@config.language ? 'en-GB')
+      @_setTempDir(@config.tmpDir ? '/tmp')
+      @_setCacheEnabled(@config.enableCache ? true)
       @_options.volume = { setting: @config.volume, max: 150, min: 1, maxRel: 100 }
       
+      @_setup()
       super()
       
     toSpeech: (ttsSettings) =>
@@ -117,8 +116,8 @@ module.exports = (env) ->
             )
           
           @emit('state', true)
-          env.logger.debug __("@_conversionSettings.speech.repeat:", @_conversionSettings.speech.repeat)
-          env.logger.debug __("@_conversionSettings.speech.interval:", @_conversionSettings.speech.interval)
+          env.logger.debug __("@_conversionSettings.speech.repeat.number: %s", @_conversionSettings.speech.repeat.number)
+          env.logger.debug __("@_conversionSettings.speech.repeat.interval: %s", @_conversionSettings.speech.repeat.interval)
           playback()
           
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error)
@@ -151,7 +150,7 @@ module.exports = (env) ->
               resolve msg
             )
             
-          env.logger.debug __("@_conversionSettings.speech.volume:", @_conversionSettings.speech.volume)
+          env.logger.debug __("@_conversionSettings.speech.volume: %s", @_conversionSettings.speech.volume)
           @_volControl = new Volume(@_pcmVolume(@_conversionSettings.speech.volume))
           @_volControl.pipe(speaker)
           audioDecoder.pipe(@_volControl)
@@ -175,7 +174,7 @@ module.exports = (env) ->
                 
                 env.logger.info("%s: Generating speech resource for '%s'", @id, @_conversionSettings.text.parsed)
                 
-                return @generateResource(cache).then( (resource) => 
+                return @generateResource(cache, @_conversionSettings.text.parsed).then( (resource) => 
                   @_setResource(resource)
                   resolve resource
                 ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
@@ -208,6 +207,31 @@ module.exports = (env) ->
     getResource: -> Promise.resolve(@_conversionSettings?.speech?.resource)
     getCache: -> Promise.resolve(@_conversionSettings?.speech?.cache)
     
+    _setAudioFormat: (value) ->
+      if value is @_options.audioFormat then return
+      @_options.audioFormat = value
+      @emit 'audioFormat', value
+      
+    _setAudioDecoder: (value) ->
+      if value is @_options.audioDecoder then return
+      @_options.audioDecoder = value
+      @emit 'audioDecoder', value
+    
+    _setLanguage: (value) ->
+      if value is @_options.language then return
+      @_options.language = value
+      @emit 'language', value
+    
+    _setTempDir: (value) ->
+      if value is @_options.tmpDir then return
+      @_options.tmpDir = value
+      @emit 'tmpDir', value
+      
+    _setCacheEnabled: (value) ->
+      if value is @_options.enableCache then return
+      @_options.enableCache = value
+      @emit 'enableCache', value
+      
     _setResource: (value) ->
       if value is @_conversionSettings.speech.resource then return
       @_conversionSettings.speech.resource = value
