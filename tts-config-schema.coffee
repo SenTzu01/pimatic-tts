@@ -7,6 +7,10 @@ module.exports = {
       description: "Debug mode. Writes debug messages to the pimatic log, if set to true."
       type: "boolean"
       default: false
+    enableDiscovery:
+      description: "Enable automatic discovery and adding of DLNA and Chromecast mediaplayers"
+      type: "boolean"
+      default: false
     discoveryTimeout:
       description: "How long should the DLNA discoverer listen for announcements, in seconds"
       type: "number"

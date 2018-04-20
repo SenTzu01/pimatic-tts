@@ -69,18 +69,14 @@ module.exports = (env) ->
       @base.debug __("Updating DLNA device information for %s", @id)
       @_dlnaDevice = config
     
-    streamResource: (url, mediaType) ->
-      return Promise.reject __('%s is not present. Cannot play: %s', @_player.name, url) unless @_presence
+    streamResource: (url, timestamp) ->
+      return Promise.reject __('%s is not present. Cannot play: %s', @_dlnaDevice.name, url) unless @_presence
       player = @_dlnaDevice
       
       return new Promise((resolve, reject) =>
-        player.stop( () =>
-          
-          player.play(url, {type: mediaType}, () => 
-            resolve("DONE") 
-          )
-        
-        )
+        player.play(url, timestamp)
+        player.onError((error) => reject error)
+        resolve true
       ).catch( (error) => reject(error))
 
     _executeOnPlayer: (cb) ->

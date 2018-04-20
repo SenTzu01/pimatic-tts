@@ -18,8 +18,7 @@ module.exports = (env) ->
   _ = env.require 'lodash'
   Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
-  DLNA = require 'dlnacasts'
-  MediaRenderer = require 'upnp-mediarenderer-client'
+  DlnaDiscovery = require('./lib/DlnaDiscovery')(env)
 
   class TextToSpeechPlugin extends env.plugins.Plugin
     
@@ -74,24 +73,12 @@ module.exports = (env) ->
       @_discoveryInterval = ( @config.discoveryInterval ? 30 )*1000
       @_discoveryInterval = @_discoveryDuration*2 unless @_discoveryInterval > @_discoveryDuration*2
       
-      @_discoveryStartTimer = null
-      @_discoveryStopTimer = null
-      
-      @_dlnaDeviceList = []
-      
       @dlnaDiscovery()
     
     dlnaDiscovery: () =>
+      @_dlnaBrowser = new DlnaDiscovery(@_discoveryInterval, @_discoveryDuration, @debug)
+      @_dlnaBrowser.on('new', (config) =>
       
-      dlnaBrowser = null
-      discoveredDevices = null
-      
-      dlnaDeviceFound = (config) =>
-        @base.debug __("DLNA device discovered: %s", config.name)
-        
-        config.id = @_createDeviceId(config.name)
-        config.client = new MediaRenderer(config.xml)
-        
         if !@_isNewDevice(config.id)
           @emit('dlnaDeviceDiscovered', config)
         
@@ -99,26 +86,12 @@ module.exports = (env) ->
           @_createDeviceFromDlnaConfig(config).catch( (error) => 
             @base.error __("Error creating device '%s': %s", config.id, error)
           )
-      
-      discoveryStop = =>
-        @base.debug __("DLNA device discovery stopped")
-        
-        dlnaBrowser.removeListener('update', dlnaDeviceFound)
-        dlnaBrowser = null
-        @emit('dlnaDiscoveryEnd', true)
-        
-      discoveryStart = =>
-        @base.debug "DLNA device discovery started"
-        
-        discoveredDevices = []
-        dlnaBrowser = DLNA()
-        dlnaBrowser.on('update', dlnaDeviceFound)
-        
-        @_discoveryStopTimer = setTimeout(discoveryStop, @_discoveryDuration)
-        @_discoveryStartTimer = setTimeout(discoveryStart, @_discoveryInterval)
-      
-      discoveryStart()
-      
+      )
+      @_dlnaBrowser.on('stop', =>
+        @emit 'dlnaDiscoveryEnd', true
+      )
+      @_dlnaBrowser.start()
+    
     _createDeviceFromDlnaConfig: (config) =>
       
       return new Promise( (resolve, reject) =>
@@ -130,17 +103,10 @@ module.exports = (env) ->
       ).catch( (error) => reject error)
     
     _isNewDevice: (id) -> return !@framework.deviceManager.isDeviceInConfig(id)
-    _createDeviceId: (id) -> return 'dlna-' + id.replace(/(^[\W]|[\W]$)/g, '').replace(/[\W]+/g, '-').toLowerCase()
     _createDeviceConfig: (dlnaConfig) -> return { id: dlnaConfig.id, name: dlnaConfig.name, class: OutputProviders.DLNA.device }
     
     destroy: () ->
-      clearTimeout @_discoveryStartTimer
-      clearTimeout @_discoveryStopTimer
-
-      @_discoveryStartTimer = undefined
-      @_discoveryStopTimer = undefined
-      
-      @_dlnaBrowser.removeListener('update', dlnaDeviceFound)
+      @_dlnaBrowser.stop()
       @removeAllListeners('dlnaDeviceDiscovered')
       @removeAllListeners('dlnaDiscoveryEnd')
       
