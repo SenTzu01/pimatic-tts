@@ -28,7 +28,7 @@ module.exports = (env) ->
       }
       
       SpeechDevices = _(@framework.deviceManager.devices).values().filter( (device) => 
-        device.hasAction("toSpeech")
+        device.hasAction("textToSpeech")
       ).value()
       
       
@@ -99,7 +99,7 @@ module.exports = (env) ->
           
           else
             
-            return @_device.toSpeech(@_ttsSettings).then( (result) =>
+            return @_device.textToSpeech(@_ttsSettings).then( (result) =>
               env.logger.debug result
               resolve result
               

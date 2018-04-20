@@ -16,6 +16,7 @@ module.exports = (env) ->
       @id = @config.id
       @name = @config.name
       
+      @maxStringLenghtGoogle = 200
       @actions = _.cloneDeep @actions
       @attributes = _.cloneDeep @attributes
       
@@ -31,35 +32,44 @@ module.exports = (env) ->
         acronym: 'Voice Speed:'
         discrete: true})
       
+      
       super()
     
     _setup: ->
       @_setAudioFormat('mp3')
-      @_setAudioDecoder(lame.Decoder)
+      @_setAudioDecoder( lame.Decoder )
       @_setSpeed(@config.speed)
-      @_setMaxStringLength(200)
+      @_setMaxStringLength(@maxStringLenghtGoogle)
       
-    getSpeed: -> Promise.resolve(@_options.speed)
+      
+    getSpeed: -> @_options.speed
+    getSpeedPercentage: -> @getSpeed() / 100
+    getMaxStringLength: -> @_options.maxStringLength
     
     generateResource: (file, text) =>
       
       return new Promise( (resolve, reject) =>
         env.logger.debug __("@_conversionSettings.text.parsed.length: %s", text.length)
-        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_conversionSettings.text.parsed.length) unless text.length < @_options.maxStringLenght
         
-        env.logger.debug __("@_options.language: %s", @_options.language)
-        @getSpeed().then( (speed) =>
-          env.logger.debug __("@_options.speed: %s. Calculated speed: %s", @_options.speed, @_options.speed/100)
-          googleAPI(text, @_options.language, @_options.speed/100).then( (resource) =>
+        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, text.length) unless text.length < @getMaxStringLength()
+        
+        @getLanguage().then( (language) =>
+          env.logger.debug __("@_options.language: %s", language)
+          env.logger.debug __("speed: %s. Calculated speed: %s", @getSpeed(), @getSpeedPercentage() )
+          
+          googleAPI( text, language, @getSpeedPercentage() ).then( (resource) =>
             env.logger.debug __("resource: %s", resource)
             
-            resRead = request.get(resource)
+            readStream = request.get(resource)
               .on('error', (error) =>
                 msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
                 env.logger.debug msg
                 @base.rejectWithErrorString Promise.reject, msg
               )
-              
+            @_writeResource(readStream, file).then( (file) =>
+              resolve file
+            )
+            ###
             fsWrite = fs.createWriteStream(file)
               .on('finish', () =>
                 fsWrite.close( () => 
@@ -73,7 +83,8 @@ module.exports = (env) ->
                 fs.unlink(file)
                 @base.rejectWithErrorString Promise.reject, error
               )
-            resRead.pipe(fsWrite)
+            ###
+            #readStream.pipe(fsWrite)
           )
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
