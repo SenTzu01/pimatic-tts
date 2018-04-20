@@ -10,9 +10,8 @@ module.exports = (env) ->
     constructor: (@config, lastState, @_plugin) ->
       @id = @config.id
       @name = @config.name
-      
+      @debug = @config.debug || false
       @base = commons.base @, "#{@id}"
-      @debug = true
       
       @_updated = false
       @_dlnaDevice = null
@@ -38,48 +37,46 @@ module.exports = (env) ->
       @addAction('stop', {
         description: "Stop playback on the DLNA Device"})
       
-      @_plugin.on('dlnaDeviceDiscovered', @_onDeviceDiscovered)
-      @_plugin.on('dlnaDiscoveryEnd', @_disableDevice)
+      onDeviceDiscovered = (config) =>
+        return unless config.id is @id
+        @updateDevice(true, config)
+        return @_updated = true
+      @_plugin.on('dlnaDeviceDiscovered', onDeviceDiscovered)
+      
+      disableDevice = () =>
+        if !@_updated
+          @updateDevice(false)
+        @_updated = false
+        return !@updated
+      @_plugin.on('dlnaDiscoveryEnd', disableDevice)
       
       super()
 
     destroy: ->
-      @_plugin.removeListener('dlnaDiscoveryEnd', @_disableDevice)
-      @_plugin.removeListener('dlnaDeviceDiscovered', @_onDeviceDiscovered)
+      @_plugin.removeListener('dlnaDiscoveryEnd', disableDevice)
+      @_plugin.removeListener('dlnaDeviceDiscovered', onDeviceDiscovered)
       super()
-    
-    _onDeviceDiscovered: (config) =>
-      @base.debug "dlnaDeviceDiscovered event received"
-      return unless config.id is @id
-      @updateDevice(true, config)
-      return @_updated = true
       
-    _disableDevice: (list) =>
-      @base.debug "dlnaDiscoveryEnd event received"
-      @updateDevice(false) if !@_updated
-      @_updated = false
-      return !@updated
-       
     updateDevice: (state, config) ->
       @_setConfig(config) if state
       return @_setState(state)
     
     _setState: (state) ->
-      @base.debug __("Setting DLNA device presence to: %s", state)
+      @base.debug __("Setting DLNA device %s presence to: %s", @id, state)
       @_setPresence(state)
       
     _setConfig: (config) -> 
-      @base.debug "Updating DLNA device information"
+      @base.debug __("Updating DLNA device information for %s", @id)
       @_dlnaDevice = config
     
     streamResource: (url, mediaType) ->
       return Promise.reject __('%s is not present. Cannot play: %s', @_player.name, url) unless @_presence
-      player = @_player
+      player = @_dlnaDevice
       
       return new Promise((resolve, reject) =>
         player.stop( () =>
           
-          player.play(url,  {type: mediaType}, () => 
+          player.play(url, {type: mediaType}, () => 
             resolve("DONE") 
           )
         
@@ -87,9 +84,9 @@ module.exports = (env) ->
       ).catch( (error) => reject(error))
 
     _executeOnPlayer: (cb) ->
-      if !@_presence or @_player is null
-        return Promise.reject(@name + ' is not present.')
-      player = @_player
+      if !@_presence or @_dlnaDevice is null
+        return Promise.reject(@_dlnaDevice.name + ' is not present.')
+      player = @_dlnaDevice
       return new Promise((resolve, reject) =>
         try
           cb(player, => resolve("DONE"))

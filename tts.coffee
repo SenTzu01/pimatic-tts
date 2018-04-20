@@ -18,7 +18,6 @@ module.exports = (env) ->
   _ = env.require 'lodash'
   Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
-  M = env.matcher
   DLNA = require 'dlnacasts'
   MediaRenderer = require 'upnp-mediarenderer-client'
 
@@ -27,7 +26,6 @@ module.exports = (env) ->
     init: (app, @framework, @config) =>
       @debug = @config.debug || false
       @base = commons.base @, 'Plugin'
-      @debug = true
       
       for own obj of TTSProviders
         do (obj) =>
@@ -72,8 +70,9 @@ module.exports = (env) ->
       actionProviderClass = require('./actions/TTSActionProvider')(env)
       @framework.ruleManager.addActionProvider(new actionProviderClass(@framework, @config))
 
-      @_discoveryInterval = ( @config.discoveryInterval ? 30 )*1000
       @_discoveryDuration = ( @config.discoveryTimeout ? 10 )*1000
+      @_discoveryInterval = ( @config.discoveryInterval ? 30 )*1000
+      @_discoveryInterval = @_discoveryDuration*2 unless @_discoveryInterval > @_discoveryDuration*2
       
       @_discoveryStartTimer = null
       @_discoveryStopTimer = null
@@ -81,10 +80,6 @@ module.exports = (env) ->
       @_dlnaDeviceList = []
       
       @dlnaDiscovery()
-      
-    _setDlnaDeviceList: (list) =>
-      @_dlnaDeviceList = list
-      @emit('dlnaDeviceList', @_dlnaDeviceList)
     
     dlnaDiscovery: () =>
       
@@ -106,7 +101,7 @@ module.exports = (env) ->
           )
       
       discoveryStop = =>
-        @base.debug __("DLNA device discovery stopped, processing results")
+        @base.debug __("DLNA device discovery stopped")
         
         dlnaBrowser.removeListener('update', dlnaDeviceFound)
         dlnaBrowser = null
@@ -145,7 +140,7 @@ module.exports = (env) ->
       @_discoveryStartTimer = undefined
       @_discoveryStopTimer = undefined
       
-      @_dlnaBrowser.removeListener('update', dlnaDeviceDiscovered)
+      @_dlnaBrowser.removeListener('update', dlnaDeviceFound)
       @removeAllListeners('dlnaDeviceDiscovered')
       @removeAllListeners('dlnaDiscoveryEnd')
       
