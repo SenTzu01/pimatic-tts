@@ -26,6 +26,8 @@ module.exports = (env) ->
       @debug = @config.debug || false
       @base = commons.base @, 'Plugin'
       
+      @_dlnaBrowser = null
+      
       for own obj of TTSProviders
         do (obj) =>
           TTSProvider = TTSProviders[obj]
@@ -69,11 +71,14 @@ module.exports = (env) ->
       actionProviderClass = require('./actions/TTSActionProvider')(env)
       @framework.ruleManager.addActionProvider(new actionProviderClass(@framework, @config))
 
-      @_discoveryDuration = ( @config.discoveryTimeout ? 10 )*1000
-      @_discoveryInterval = ( @config.discoveryInterval ? 30 )*1000
-      @_discoveryInterval = @_discoveryDuration*2 unless @_discoveryInterval > @_discoveryDuration*2
+      @_discoverNetworkPlayers() if @config.enableDiscovery
       
-      @_dlnaBrowser = new DlnaDiscovery(@_discoveryInterval, @_discoveryDuration, @debug)
+    _discoverNetworkPlayers: () =>
+      discoveryInterval = ( @config.discoveryInterval ? 30 )*1000
+      discoveryDuration = ( @config.discoveryTimeout ? 10 )*1000
+      discoveryInterval = discoveryDuration*2 unless discoveryInterval > discoveryDuration*2
+      
+      @_dlnaBrowser = new DlnaDiscovery(discoveryInterval, discoveryDuration, @debug)
       @_dlnaBrowser.on('new', (config) =>
       
         @emit('dlnaDeviceDiscovered', config)
@@ -98,12 +103,9 @@ module.exports = (env) ->
         @base.error __("Error creating DLNA device '%s'", config.id)
     
     _isNewDevice: (id) -> return !@framework.deviceManager.isDeviceInConfig(id)
-    _createDeviceConfig: (dlnaConfig) -> return { id: dlnaConfig.id, name: dlnaConfig.name, class: OutputProviders.DLNA.device }
     
     destroy: () ->
-      @_dlnaBrowser.stop()
-      @removeAllListeners('dlnaDeviceDiscovered')
-      @removeAllListeners('dlnaDiscoveryEnd')
+      #@_dlnaBrowser.stop() if @_dlnaBrowser?
       
   TTSPlugin = new TextToSpeechPlugin
   return TTSPlugin

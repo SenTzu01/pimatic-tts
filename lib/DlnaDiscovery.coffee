@@ -9,7 +9,7 @@ module.exports = (env) ->
   class DlnaDiscovery extends events.EventEmitter
     
     constructor: (@_interval, @_duration, @debug = false) ->
-      @base = commons.base @, 'Plugin'
+      @base = commons.base @, 'DlnaDiscovery'
       
       @_interval ?= 30 *1000
       @_duration ?= 10 *1000

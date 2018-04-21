@@ -11,8 +11,7 @@ module.exports = (env) ->
       @id = @config.id
       @name = @config.name
       @debug = @config.debug || false
-      @debug = true
-      @base = commons.base @, ""
+      @base = commons.base @, @config.class
       
       @_detected = false
       @_device = lastState?.device?.value or null

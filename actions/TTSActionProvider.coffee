@@ -24,6 +24,10 @@ module.exports = (env) ->
             number: null,
             interval: null
           }
+        },
+        output: {
+          device: null
+          volume: null
         }
       }
       
@@ -31,6 +35,9 @@ module.exports = (env) ->
         device.hasAction("textToSpeech")
       ).value()
       
+      DlnaDevices = _(@framework.deviceManager.devices).values().filter( (device) => 
+        device.hasAction("startDlnaStreaming")
+      ).value()
       
       setText = (m, input) => 
         ttsSettings.text.input = input
@@ -39,6 +46,7 @@ module.exports = (env) ->
       setSpeechVolume = (m, v) =>
         m.match([" with volume "]).matchNumber( (m, v) =>
           ttsSettings.speech.volume = v
+          ttsSettings.output.volume = v
         )
       
       setSpeechRepeatNumber = (m, r) => 
@@ -51,9 +59,15 @@ module.exports = (env) ->
           ttsSettings.speech.repeat.interval = w
         ).match([" s", " seconds"])
       
+      setOutputDevice = (m, d) => 
+        m.match([" via "]).matchDevice(DlnaDevices, (m, d) =>
+          ttsSettings.output.device = d
+        )
+        
       setDevice = (m, d) => 
         device = d
         ttsSettings.speech.volume = d.config?.volume
+        ttsSettings.output.volume = d.config?.volume
         ttsSettings.speech.repeat.number = d.config?.repeat
         ttsSettings.speech.repeat.interval = d.config?.interval
 
@@ -62,6 +76,7 @@ module.exports = (env) ->
         .matchStringWithVars(setText)
         .match(" using ")
         .matchDevice(SpeechDevices, setDevice)
+        .optional(setOutputDevice)
         .optional(setSpeechVolume)
         .optional(setSpeechRepeatNumber)
         .optional(setSpeechRepeatInterval)
@@ -85,6 +100,7 @@ module.exports = (env) ->
       
     setup: () ->
       @dependOnDevice(@_device)
+      @dependOnDevice(@ttsSettings.output.device) if @ttsSettings?.output?.device?
       super()
     
     executeAction: (simulate) =>
