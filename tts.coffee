@@ -73,19 +73,11 @@ module.exports = (env) ->
       @_discoveryInterval = ( @config.discoveryInterval ? 30 )*1000
       @_discoveryInterval = @_discoveryDuration*2 unless @_discoveryInterval > @_discoveryDuration*2
       
-      @dlnaDiscovery()
-    
-    dlnaDiscovery: () =>
       @_dlnaBrowser = new DlnaDiscovery(@_discoveryInterval, @_discoveryDuration, @debug)
       @_dlnaBrowser.on('new', (config) =>
       
-        if !@_isNewDevice(config.id)
-          @emit('dlnaDeviceDiscovered', config)
-        
-        else
-          @_createDeviceFromDlnaConfig(config).catch( (error) => 
-            @base.error __("Error creating device '%s': %s", config.id, error)
-          )
+        @emit('dlnaDeviceDiscovered', config)
+        @_createDeviceFromDlnaConfig(config) if @_isNewDevice(config.id)
       )
       @_dlnaBrowser.on('stop', =>
         @emit 'dlnaDiscoveryEnd', true
@@ -93,14 +85,17 @@ module.exports = (env) ->
       @_dlnaBrowser.start()
     
     _createDeviceFromDlnaConfig: (config) =>
+      @base.debug __("Creating Pimatic DLNA device: %s", config.name)
       
-      return new Promise( (resolve, reject) =>
-        @base.debug __("Creating Pimatic DLNA device: %s", config.name)
-        
-        device = @framework.deviceManager.addDeviceByConfig( @_createDeviceConfig(config) )
-        resolve device.updateDevice(true, config)
-        
-      ).catch( (error) => reject error)
+      device = @framework.deviceManager.addDeviceByConfig({
+        id: dlnaConfig.id
+        name: dlnaConfig.name
+        class: OutputProviders.DLNA.device })
+      
+      if device?
+        device.updateDevice(config, true)
+      else 
+        @base.error __("Error creating DLNA device '%s'", config.id)
     
     _isNewDevice: (id) -> return !@framework.deviceManager.isDeviceInConfig(id)
     _createDeviceConfig: (dlnaConfig) -> return { id: dlnaConfig.id, name: dlnaConfig.name, class: OutputProviders.DLNA.device }

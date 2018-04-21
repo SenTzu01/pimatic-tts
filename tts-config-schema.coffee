@@ -18,5 +18,5 @@ module.exports = {
      discoveryInterval:
       description: "How often should the DLNA discoverer refresh, in seconds. Must be at least twice Timeout setting."
       type: "number"
-      default: 30
+      default: 60
 }

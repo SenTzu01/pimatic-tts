@@ -11,87 +11,83 @@ module.exports = (env) ->
       @id = @config.id
       @name = @config.name
       @debug = @config.debug || false
-      @base = commons.base @, "#{@id}"
+      @debug = true
+      @base = commons.base @, ""
       
-      @_updated = false
-      @_dlnaDevice = null
+      @_detected = false
+      @_device = lastState?.device?.value or null
       
-      @addAction('streamResource', {
-        description: "Stream a resource to the DLNA device"
+      @addAttribute('type',{
+        description: "DLNA Type"
+        type: t.string
+        acronym: 'DLNA Type:'
+        discrete: true})
+            
+      @addAttribute('host',{
+        description: "Device network address"
+        type: t.string
+        acronym: 'Network address:'
+        discrete: true})
+        
+      @addAction('startDlnaStreaming', {
+        description: "Stream a media resource to the DLNA device"
         params:
           url:
-            type: t.string})
+            type: t.string
+      })
       
-      @addAction('updatePlayer', {
-        description: "Update DLNA network presence"
-        params:
-          player:
-            type: t.object})
-      
-      @addAction('play', {
-        description: "Start playback on the DLNA Device"})
-      
-      @addAction('pause', {
-        description: "Pauses playback on the DLNA Device"})
-      
-      @addAction('stop', {
+      @addAction('stopDlnaStreaming', {
         description: "Stop playback on the DLNA Device"})
       
-      onDeviceDiscovered = (config) =>
-        return unless config.id is @id
-        @updateDevice(true, config)
-        return @_updated = true
-      @_plugin.on('dlnaDeviceDiscovered', onDeviceDiscovered)
+      @_plugin.on('dlnaDeviceDiscovered', @updateDevice)
       
-      disableDevice = () =>
-        if !@_updated
-          @updateDevice(false)
-        @_updated = false
-        return !@updated
-      @_plugin.on('dlnaDiscoveryEnd', disableDevice)
+      onDiscoveryEnd = () =>
+        @_setPresence(false) if !@_detected
+        @_detected = false
+      @_plugin.on('dlnaDiscoveryEnd', onDiscoveryEnd)
       
       super()
 
     destroy: ->
-      @_plugin.removeListener('dlnaDiscoveryEnd', disableDevice)
-      @_plugin.removeListener('dlnaDeviceDiscovered', onDeviceDiscovered)
+      @_plugin.removeListener('dlnaDiscoveryEnd', onDiscoveryEnd)
+      @_plugin.removeListener('dlnaDeviceDiscovered', @updateDevice)
       super()
       
-    updateDevice: (state, config) ->
-      @_setConfig(config) if state
-      return @_setState(state)
+    updateDevice: (device) =>
+      return unless device.id is @id
+      @_setDevice(device)
+      @_setPresence(true)
+      @_detected = true
     
-    _setState: (state) ->
-      @base.debug __("Setting DLNA device %s presence to: %s", @id, state)
-      @_setPresence(state)
+    _setPresence: (presence) ->
+      return if presence is @_presence
+      @base.debug __("Network Presence: %s", presence)
+      super(presence)
       
-    _setConfig: (config) -> 
-      @base.debug __("Updating DLNA device information for %s", @id)
-      @_dlnaDevice = config
+    _setDevice: (device) ->
+      @base.debug __("Updating network device information for %s", @id)
+      @_device = device
+      @emit 'host', device.host
+      @emit 'type', device.type
+      @emit('device', device)
     
-    streamResource: (url, timestamp) ->
-      return Promise.reject __('%s is not present. Cannot play: %s', @_dlnaDevice.name, url) unless @_presence
-      player = @_dlnaDevice
+    getDevice: () -> Promise.resolve(@_device)
+    getType: () -> Promise.resolve(@_device?.type or 'N/A')
+    getHost: () -> Promise.resolve(@_device?.host or '0.0.0.0')
+    
+    play: (url...) -> @startDlnaStreaming(url...)
+    
+    stopDlnaStreaming: () -> 
+      return Promise.reject __('%s is not present. Cannot stop player', @_device.name) unless @_presence
+      @_device.stop()
+    
+    startDlnaStreaming: (url, mediatype = 'audio/mp3', timestamp) ->
+      return Promise.reject __('%s is not present. Cannot play: %s', @_device.name, url) unless @_presence
       
       return new Promise((resolve, reject) =>
-        player.play(url, timestamp)
-        player.onError((error) => reject error)
+        @_device.play(url, timestamp, mediatype)
+        @_device.onError((error) => reject error)
         resolve true
       ).catch( (error) => reject(error))
-
-    _executeOnPlayer: (cb) ->
-      if !@_presence or @_dlnaDevice is null
-        return Promise.reject(@_dlnaDevice.name + ' is not present.')
-      player = @_dlnaDevice
-      return new Promise((resolve, reject) =>
-        try
-          cb(player, => resolve("DONE"))
-        catch e
-          reject(e)
-      )
-
-    stop: -> @_executeOnPlayer( (player, cb) => player.stop(cb) )
-    play: -> @_executeOnPlayer( (player, cb) => player.resume(cb) )
-    pause: -> @_executeOnPlayer( (player, cb) => player.pause(cb) )
-  
+    
   return DLNAPlayerDevice
