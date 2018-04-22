@@ -31,51 +31,48 @@ module.exports = (env) ->
         }
       }
       
-      SpeechDevices = _(@framework.deviceManager.devices).values().filter( (device) => 
-        device.hasAction("textToSpeech")
-      ).value()
+      devicesWithFunction = (f) =>
+        _(@framework.deviceManager.devices).values().filter( (device) => 
+          device.hasAction(f)
+        ).value()
       
-      DlnaDevices = _(@framework.deviceManager.devices).values().filter( (device) => 
-        device.hasAction("startDlnaStreaming")
-      ).value()
+      setText = (m, t) =>
+        ttsSettings.text.input = t
+        ttsSettings.text.static = !@framework.variableManager.extractVariables(t).length > 0
       
-      setText = (m, input) => 
-        ttsSettings.text.input = input
-        ttsSettings.text.static = !@framework.variableManager.extractVariables(input).length > 0
-      
-      setSpeechVolume = (m, v) =>
-        m.match([" with volume "]).matchNumber( (m, v) =>
+      setSpeechVolume = (m) =>
+        m.match([" with volume "]).matchNumericExpression( (m, v) =>
           ttsSettings.speech.volume = v
           ttsSettings.output.volume = v
         )
       
-      setSpeechRepeatNumber = (m, r) => 
-        m.match([" repeating "]).matchNumber( (m, r) =>
+      setSpeechRepeatNumber = (m) =>
+        m.match([" repeating "]).matchNumericExpression( (m, r) =>
           ttsSettings.speech.repeat.number = r
         ).match([" times"])
       
-      setSpeechRepeatInterval = (m, w) => 
-        m.match([" every "]).matchNumber( (m, w) =>
+      setSpeechRepeatInterval = (m) =>
+        m.match([" every "]).matchNumericExpression( (m, w) =>
           ttsSettings.speech.repeat.interval = w
         ).match([" s", " seconds"])
       
-      setOutputDevice = (m, d) => 
-        m.match([" via "]).matchDevice(DlnaDevices, (m, d) =>
+      setOutputDevice = (m) =>
+        m.match([" via "]).matchDevice(devicesWithFunction("playAudio"), (m, d) =>
           ttsSettings.output.device = d
         )
         
-      setDevice = (m, d) => 
+      setDevice = (m, d) =>
         device = d
         ttsSettings.speech.volume = d.config?.volume
         ttsSettings.output.volume = d.config?.volume
         ttsSettings.speech.repeat.number = d.config?.repeat
         ttsSettings.speech.repeat.interval = d.config?.interval
-
+      
       m = M(input, context)
         .match(["speak ", "Speak ", "say ", "Say "])
         .matchStringWithVars(setText)
         .match(" using ")
-        .matchDevice(SpeechDevices, setDevice)
+        .matchDevice(devicesWithFunction("textToSpeech"), setDevice)
         .optional(setOutputDevice)
         .optional(setSpeechVolume)
         .optional(setSpeechRepeatNumber)
