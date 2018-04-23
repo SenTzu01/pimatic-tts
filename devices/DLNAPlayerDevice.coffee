@@ -11,7 +11,7 @@ module.exports = (env) ->
       @id = @config.id
       @name = @config.name
       @debug = @config.debug || false
-      @base = commons.base @, @config.class
+      @base = commons.base @, "DLNAPlayerDevice"
       
       @_detected = false
       @_device = lastState?.device?.value or null
@@ -32,6 +32,13 @@ module.exports = (env) ->
         description: "Stream a media resource to the DLNA device"
         params:
           url:
+            type: t.string
+      })
+      
+      @addAction('playAudio', {
+        description: "Stream a media resource to the DLNA device"
+        params:
+          resource:
             type: t.string
       })
       
@@ -74,7 +81,10 @@ module.exports = (env) ->
     getType: () -> Promise.resolve(@_device?.type or 'N/A')
     getHost: () -> Promise.resolve(@_device?.host or '0.0.0.0')
     
-    play: (url...) -> @startDlnaStreaming(url...)
+    playAudio: (resource) -> 
+      env.logger.debug __("Would play %s", resource)
+      Promise.resolve resource
+      #@startDlnaStreaming(url...)
     
     stopDlnaStreaming: () -> 
       return Promise.reject __('%s is not present. Cannot stop player', @_device.name) unless @_presence

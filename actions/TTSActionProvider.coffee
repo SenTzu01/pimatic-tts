@@ -8,7 +8,8 @@ module.exports = (env) ->
   class TTSActionProvider extends env.actions.ActionProvider
     
     constructor: (@framework, @config) ->
-    
+      @base = commons.base @, 'Pimatic-TTS-TTSActionProvider'
+      
     parseAction: (input, context) =>
       device = null
       ttsSettings = {
@@ -63,10 +64,10 @@ module.exports = (env) ->
         
       setDevice = (m, d) =>
         device = d
-        ttsSettings.speech.volume = d.config?.volume
-        ttsSettings.output.volume = d.config?.volume
-        ttsSettings.speech.repeat.number = d.config?.repeat
-        ttsSettings.speech.repeat.interval = d.config?.interval
+        ttsSettings.speech.volume = [d.config.volume]
+        ttsSettings.output.volume = [d.config.volume]
+        ttsSettings.speech.repeat.number = [d.config.repeat]
+        ttsSettings.speech.repeat.interval = [d.config.interval]
       
       m = M(input, context)
         .match(["speak ", "Speak ", "say ", "Say "])
@@ -79,8 +80,9 @@ module.exports = (env) ->
         .optional(setSpeechRepeatInterval)
 
       if m.hadMatch()
-        ttsSettings.speech.repeat.interval = 0 if ttsSettings.speech.repeat.number < 2
         match = m.getFullMatch()
+        env.logger.debug ttsSettings
+        
         return {
           token: match
           nextInput: input.substring(match.length)
@@ -92,7 +94,7 @@ module.exports = (env) ->
   class TTSActionHandler extends env.actions.ActionHandler
   
     constructor: (@framework, @config, @_device, @_ttsSettings) ->
-      @base = commons.base @, 'Pimatic-TTS-TTSActionProvider'
+      @base = commons.base @, 'Pimatic-TTS-TTSActionHandler'
       super()
       
     setup: () ->
@@ -102,24 +104,36 @@ module.exports = (env) ->
     
     executeAction: (simulate) =>
       return new Promise( (resolve, reject) =>
-        return @framework.variableManager.evaluateStringExpression(@_ttsSettings.text.input).then( (text) =>
-          @_ttsSettings.text.parsed = text
-          
-          env.logger.debug __("TTSActionHandler - Device: '%s', Text: '%s'", @_device.id, @_ttsSettings.text.parsed)
-          
-          if simulate
-            return __("would convert Text to Speech: \"%s\"", @_ttsSettings.text.parsed)
-          
-          else
+        return Promise.join(
+          @framework.variableManager.evaluateStringExpression(@_ttsSettings.text.input),
+          @framework.variableManager.evaluateNumericExpression(@_ttsSettings.speech.volume),
+          @framework.variableManager.evaluateNumericExpression(@_ttsSettings.output.volume),
+          @framework.variableManager.evaluateNumericExpression(@_ttsSettings.speech.repeat.number),
+          @framework.variableManager.evaluateNumericExpression(@_ttsSettings.speech.repeat.interval),
+          (text, speechVolume, outputVolume, repeat, interval) =>
+            @_ttsSettings.text.parsed = text
+            @_ttsSettings.speech.volume = speechVolume
+            @_ttsSettings.output.volume = outputVolume
+            @_ttsSettings.speech.repeat.number = repeat
+            @_ttsSettings.speech.repeat.interval = interval
+            @_ttsSettings.speech.repeat.interval = 0 if @_ttsSettings.speech.repeat.number < 2
+            env.logger.debug @_ttsSettings
             
-            return @_device.textToSpeech(@_ttsSettings).then( (result) =>
-              env.logger.debug result
-              resolve result
+            env.logger.debug __("TTSActionHandler - Device: '%s', Text: '%s'", @_device.id, @_ttsSettings.text.parsed)
+            
+            if simulate
+              return __("would convert Text to Speech: \"%s\"", @_ttsSettings.text.parsed)
+            
+            else
               
-            ).catch( (error) =>
-              @base.rejectWithErrorString Promise.reject, error
-            )
-            
+              return @_device.textToSpeech(@_ttsSettings).then( (result) =>
+                env.logger.debug result
+                resolve result
+                
+              ).catch( (error) =>
+                @base.rejectWithErrorString Promise.reject, error
+              )
+              
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     

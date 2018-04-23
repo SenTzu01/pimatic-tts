@@ -59,6 +59,11 @@ module.exports = (env) ->
         params:
           text:
             type: t.object
+      playAudio:
+        description: "Outputs Audio to the configured device"
+        params:
+          resource:
+            type: t.string
       
     generateResource: () -> throw new Error "Function \"generateResource\" is not implemented!"
     _setup: () -> throw new Error "Function \"\" is not implemented!"
@@ -78,11 +83,15 @@ module.exports = (env) ->
     textToSpeech: (ttsSettings) =>
       @_setConversionSettings(ttsSettings)
       
+      
       return new Promise( (resolve, reject) =>
         ms = 1000
         text = @getText()
-        interval = @getInterval()
-        repeat = @getRepeat()
+        interval = @getSessionInterval()
+        repeat = @getSessionRepeat()
+        outputDevice = @getOutputDevice()
+        
+        env.logger.debug __("text: %s interval: %s, repeat: %s", text, interval, repeat)
         @_getResource(text).then( (resource) =>
           
           @base.rejectWithErrorString Promise.reject, __("%s - TTS text provided is null or undefined.", @config.id) unless text?
@@ -93,7 +102,7 @@ module.exports = (env) ->
           playback = =>
             env.logger.debug __("%s: Starting audio output for iteration: %s", @id, i+1)
             
-            @_outputToSpeakers(resource).then( (result) =>
+            outputDevice.playAudio(resource).then( (result) =>
               env.logger.debug __("%s: Finished audio output for iteration: %s", @id, i+1)
               
               results.push result
@@ -130,6 +139,10 @@ module.exports = (env) ->
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error)
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
+    outputSpeech: (resource) =>
+      device = @getOutputDevice()
+      device.play(resource)
+      
     _getResource: (text) =>
       env.logger.debug __("%s: Getting TTS Resource for text: '%s', language: '%s'", @id, text, @_options.language)
       
@@ -180,7 +193,7 @@ module.exports = (env) ->
         readStream.pipe(fsWrite)
       )
             
-    _outputToSpeakers:(resource) =>
+    playAudio: (resource) =>
       return new Promise( (resolve, reject) =>
         
         audioDecoder = @getAudioDecoder()
@@ -204,10 +217,12 @@ module.exports = (env) ->
               resolve msg
             )
             
-          env.logger.debug __("@_conversionSettings.speech.volume: %s", @getVolume())
-          @_volControl = new Volume( @_pcmVolume( @getVolume() ) )
-          @_volControl.pipe(speaker)
-          audioDecoder.pipe(@_volControl)
+          @getVolume().then( (volume) =>
+            env.logger.debug __("@_conversionSettings.speech.volume: %s", volume)
+            @_volControl = new Volume( @_pcmVolume( volume ) )
+            @_volControl.pipe(speaker)
+            audioDecoder.pipe(@_volControl)
+          )
         )
         
         fs.createReadStream(resource).pipe(audioDecoder)
@@ -215,25 +230,25 @@ module.exports = (env) ->
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
         
       
-    getIntervalDefault: -> Promise.resolve @_config.interval
-    getVolumeDefault: -> Promise.resolve @config?.volume
-    getRepeatDefault: -> Promise.resolve @config?.repeat
+    getInterval: -> Promise.resolve @config.interval
+    getVolume: -> Promise.resolve @config.volume
+    getRepeat: -> Promise.resolve @config.repeat
+    getLanguage: -> Promise.resolve @config.language
     
-    getLanguage: -> Promise.resolve @config?.language
-    getTempDir: -> @config?.tmpDir
-    isCacheEnabled: -> @config?.enableCache
-    
-    getVolume: -> @_conversionSettings?.speech?.volume
+    getTempDir: -> @config.tmpDir
+    isCacheEnabled: -> @config.enableCache
+    getSessionVolume: -> @_conversionSettings?.speech?.volume ? @config.volume
+    getSessionRepeat: -> @_conversionSettings?.speech?.repeat?.number ? @config.repeat
+    getSessionInterval: -> @_conversionSettings?.speech?.repeat?.interval ? @config.interval
     getMaxRelativeVolume: -> @_options.volume.maxRel
     getMaxVolume: -> @_options.volume.max
     getMinVolume: -> @_options.volume.min
-    getRepeat: -> @_conversionSettings?.speech?.repeat?.number
-    getInterval: -> @_conversionSettings?.speech?.repeat?.interval
-    getText: -> @_conversionSettings?.text?.parsed
-    isStatic: -> @_conversionSettings?.text?.static
-    getResource: -> @_conversionSettings?.speech?.resource
+    getText: -> @_conversionSettings.text.parsed
+    isStatic: -> @_conversionSettings.text.static
+    getResource: -> @_conversionSettings.speech.resource
     getAudioDecoder: -> new @_options.audioDecoder()
     getAudioFormat: -> @_options.audioFormat
+    getOutputDevice: -> @_conversionSettings.output.device ? @
     
     _setAudioFormat: (value) ->
       if value is @_options.audioFormat then return

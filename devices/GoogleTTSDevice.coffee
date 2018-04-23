@@ -69,22 +69,6 @@ module.exports = (env) ->
             @_writeResource(readStream, file).then( (file) =>
               resolve file
             )
-            ###
-            fsWrite = fs.createWriteStream(file)
-              .on('finish', () =>
-                fsWrite.close( () => 
-                        
-                  env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, text)
-                  env.logger.debug __("file: %s", file)
-                  resolve file
-                )
-              )
-              .on('error', (error) =>
-                fs.unlink(file)
-                @base.rejectWithErrorString Promise.reject, error
-              )
-            ###
-            #readStream.pipe(fsWrite)
           )
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
