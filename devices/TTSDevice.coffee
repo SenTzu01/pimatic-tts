@@ -125,11 +125,11 @@ module.exports = (env) ->
                   
                 @emit('state', false)
                 
-                Promise.all(results).then( (result) =>
+                return Promise.all(results).then( (result) =>
                   resolve __("'%s' was spoken %s times", text, repeat)
                 
                 ).catch(Promise.AggregateError, (error) =>
-                  Promise.reject __("'%s' was NOT spoken %s times. Error: %s", text, repeat, error)
+                  reject __("'%s' was NOT spoken %s times. Error: %s", text, repeat, error)
                 )
                 
             ).catch( (error) =>
