@@ -9,7 +9,7 @@ module.exports = (env) ->
   
   class PicoTTSDevice extends TTSDevice
     
-    constructor: (@config, lastState) ->
+    constructor: (@config, lastState, @pluginConfig) ->
       @id = @config.id
       @name = @config.name
       

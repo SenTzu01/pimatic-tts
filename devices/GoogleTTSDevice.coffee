@@ -12,7 +12,7 @@ module.exports = (env) ->
   
   class GoogleTTSDevice extends TTSDevice
     
-    constructor: (@config, lastState) ->
+    constructor: (@config, lastState, @pluginConfig) ->
       @id = @config.id
       @name = @config.name
       
@@ -40,7 +40,6 @@ module.exports = (env) ->
       @_setAudioDecoder( lame.Decoder )
       @_setSpeed(@config.speed)
       @_setMaxStringLength(@maxStringLenghtGoogle)
-      
       
     getSpeed: -> @_options.speed
     getSpeedPercentage: -> @getSpeed() / 100
@@ -83,7 +82,6 @@ module.exports = (env) ->
       @_options.maxStringLength = value
       @emit 'maxStringLength', value
     
-
     destroy: () ->
       super()
   

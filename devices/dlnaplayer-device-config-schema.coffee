@@ -9,6 +9,5 @@ module.exports = {
         type: "boolean"
         default: false
         required: false
-        
   }
 }

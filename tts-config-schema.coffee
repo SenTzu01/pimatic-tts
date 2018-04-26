@@ -15,8 +15,13 @@ module.exports = {
       description: "How long should the DLNA discoverer listen for announcements, in seconds"
       type: "number"
       default: 10
-     discoveryInterval:
+    discoveryInterval:
       description: "How often should the DLNA discoverer refresh, in seconds. Must be at least twice Timeout setting."
       type: "number"
       default: 60
+    address:
+      description: "Local IP used for streaming media resources to network audio devices. Must be set when multiple interfaces are connected."
+      type: "string"
+      default: ""
+      
 }

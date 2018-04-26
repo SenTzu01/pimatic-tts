@@ -8,7 +8,8 @@ module.exports = (env) ->
   Crypto = require('crypto')
   Volume = require('pcm-volume')
   Speaker = require('speaker')
-
+  MediaServer = require('../lib/DlnaMediaServer')(env)
+  
   
   class TTSDevice extends env.devices.Device
     attributes:
@@ -66,7 +67,7 @@ module.exports = (env) ->
             type: t.string
       
     generateResource: () -> throw new Error "Function \"generateResource\" is not implemented!"
-    _setup: () -> throw new Error "Function \"\" is not implemented!"
+    _setup: () -> throw new Error "Function \"_setup\" is not implemented!"
     
     constructor: () ->
       @base = commons.base @, @config.class
@@ -77,12 +78,14 @@ module.exports = (env) ->
       @_setCacheEnabled(@config.enableCache ? true)
       @_options.volume = { setting: @config.volume, max: 150, min: 1, maxRel: 100 }
       
+      @_mediaServer = null
+      @_mediaServerAddress = @pluginConfig.address
+      
       @_setup()
       super()
       
     textToSpeech: (ttsSettings) =>
       @_setConversionSettings(ttsSettings)
-      
       
       return new Promise( (resolve, reject) =>
         ms = 1000
@@ -92,14 +95,14 @@ module.exports = (env) ->
         outputDevice = @getOutputDevice()
         
         env.logger.debug __("text: %s interval: %s, repeat: %s", text, interval, repeat)
+        @base.rejectWithErrorString Promise.reject, __("%s - TTS text provided is null or undefined.", @config.id) unless text?
+        
         @_getResource(text).then( (resource) =>
-          
-          @base.rejectWithErrorString Promise.reject, __("%s - TTS text provided is null or undefined.", @config.id) unless text?
-          env.logger.debug __("%s: resource: %s", @id, resource)
-
           i = 0
           results = []
+          
           playback = =>
+            
             env.logger.debug __("%s: Starting audio output for iteration: %s", @id, i+1)
             
             outputDevice.playAudio(resource).then( (result) =>
@@ -116,25 +119,44 @@ module.exports = (env) ->
                   env.logger.debug __("%s: Static text: %s, Cache enabled: %s. Removing cached file: '%s'", @id, @isStatic(), @isCacheEnabled(), resource)
                   @_removeCache(resource)
                 
+                if @_mediaServer?
+                  @_mediaServer.stop()
+                  @_mediaServer = null
+                  
                 @emit('state', false)
                 
                 Promise.all(results).then( (result) =>
                   resolve __("'%s' was spoken %s times", text, repeat)
                 
                 ).catch(Promise.AggregateError, (error) =>
-                  reject __("'%s' was NOT spoken %s times. Error: %s", text, repeat, error)
+                  Promise.reject __("'%s' was NOT spoken %s times. Error: %s", text, repeat, error)
                 )
                 
             ).catch( (error) =>
               @emit('state', false)
               @base.rejectWithErrorString Promise.reject, error
             )
-            
-          @emit('state', true)
+          
+          env.logger.debug __("%s: resource: %s", @id, resource)
           env.logger.debug __("@_conversionSettings.speech.repeat.number: %s", repeat)
           env.logger.debug __("@_conversionSettings.speech.repeat.interval: %s", interval)
-            
-          playback()
+          
+          
+          @emit('state', true)
+          env.logger.debug __("outputDevice.type: '%s'", outputDevice.type)
+          if outputDevice.type is 'upnp'
+            @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress})
+            #@_mediaServer.on('error', (error) => return Promise.reject error )
+            #@_mediaServer.on('clientError', (error) => return Promise.reject error)
+            @_mediaServer.create(resource).then( (url) =>
+              env.logger.debug "server created"
+              env.logger.debug __("url: %s", url)
+              resource = url
+              playback()
+            ).catch( (error) => Promise.reject error )
+          
+          else
+            playback()
           
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error)
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )

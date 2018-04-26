@@ -81,7 +81,6 @@ module.exports = (env) ->
 
       if m.hadMatch()
         match = m.getFullMatch()
-        env.logger.debug ttsSettings
         
         return {
           token: match
@@ -117,7 +116,6 @@ module.exports = (env) ->
             @_ttsSettings.speech.repeat.number = repeat
             @_ttsSettings.speech.repeat.interval = interval
             @_ttsSettings.speech.repeat.interval = 0 if @_ttsSettings.speech.repeat.number < 2
-            env.logger.debug @_ttsSettings
             
             env.logger.debug __("TTSActionHandler - Device: '%s', Text: '%s'", @_device.id, @_ttsSettings.text.parsed)
             
@@ -127,7 +125,6 @@ module.exports = (env) ->
             else
               
               return @_device.textToSpeech(@_ttsSettings).then( (result) =>
-                env.logger.debug result
                 resolve result
                 
               ).catch( (error) =>
