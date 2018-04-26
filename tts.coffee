@@ -84,7 +84,7 @@ module.exports = (env) ->
       discoveryDuration = ( @config.discoveryTimeout ? 10 )*1000
       discoveryInterval = discoveryDuration*2 unless discoveryInterval > discoveryDuration*2
       
-      @_dlnaBrowser = new DlnaDiscovery(discoveryInterval, discoveryDuration, @debug)
+      @_dlnaBrowser = new DlnaDiscovery(discoveryInterval, discoveryDuration, false)
       @_dlnaBrowser.on('new', (config) =>
       
         @emit('dlnaDeviceDiscovered', config)
@@ -102,7 +102,7 @@ module.exports = (env) ->
       
       device = @framework.deviceManager.addDeviceByConfig({
         id: dlnaConfig.id
-        name: dlnaConfig.name
+        name: __("%s (%s)", dlnaConfig.name, dlnaConfig.type.toUpperCase())
         class: OutputProviders.DLNA.device })
       
       if device?

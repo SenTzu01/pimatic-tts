@@ -6,37 +6,6 @@ module.exports = (env) ->
   StreamServer = require('mediaserver')
   path = require('path')
   
-  ###
-  #
-  # Usage:
-  #
-  # mediaServer = new DlnaMediaServer()
-  #
-  # mediaServer.on('ready', (url) =>
-  #   #Do your magic here, e.g. tell a DLNA device to start playing the url
-  # )
-  #
-  # mediaServer.on('responseFinish', () =>
-  #   # Do what needs to be done after serving the resource is completed
-  # )
-  #
-  # # Setup error event handlers
-  #
-  # onError = (error) =>
-  #   error ?= "Undefined error"
-  #   throw new error if error?
-  #   mediaServer.stop()
-  # mediaServer.on('responseClose', onError)
-  # mediaServer.on('clientError', onError)
-  #
-  # resource = '/path/to/resource.mp3'
-  # opts = { port: 8080} #(optional, else the listen port will be dynamically allocated)
-  # mediaServer.create(opts)
-  # mediaServer.start(resource)
-  # 
-  #
-  #
-  ###
   class DlnaMediaServer extends events.EventEmitter
 
     constructor: (@_opts = {port: 0} ) ->
@@ -54,11 +23,11 @@ module.exports = (env) ->
         @_physicalResource = resource
         @_virtualResource = path.join( @_virtualDirMedia, path.basename(resource) )
         
-        @_httpServer = http.createServer()
+        @_httpServer = http.createServer() if !@_httpServer?
         
         @_httpServer.on('request', @_requestListener)
         
-        @_httpServer.on('error', (error) => return Promise.reject error )
+        @_httpServer.on('error', (error) => reject error )
         @_httpServer.on('clientError', (error = "undefined") => @emit('clientError', new Error(error) ) )
         
         
@@ -88,20 +57,25 @@ module.exports = (env) ->
       )
     
     _requestListener: (request, response) =>
-      env.logger.debug "in _requestHandler()"
-      #request.on('aborted', () => @emit('requestAborted', new Error("Client prematurely aborted the request") ) )
-      #response.on('close', () => @emit('responseClose', new Error("Server prematurely closed the connection") ) )
-      #request.on('close', () => 
-      #  env.logger.debug __("Client closed connection") 
-      #  @emit('requestComplete', request.url)
-      #)
       
-      #response.on('finish', () => 
-      #  env.logger.debug __("Server responded to request")
-      #@emit('responseComplete', response) )
-
-      env.logger.debug __("_requestListener, request:")
-      env.logger.debug request
+      response.on('close', () =>
+        @emit('responseClose', new Error("Server prematurely closed the connection") ) 
+      )
+      response.on('finish', () => 
+        env.logger.debug __("Server responded to request")
+        @emit('responseComplete', response) 
+      )
+      
+      if request?
+        env.logger.debug __("New request from: %s", request.socket.remoteAddress)
+        
+        request.on('aborted', () => 
+          @emit('requestAborted', new Error("Client prematurely aborted the request") ) 
+        )
+        request.on('close', () => 
+          env.logger.debug __("Client closed connection") 
+          @emit('requestComplete', request.url)
+        )
       
       if @_virtualResource != request?.url
         body = http.STATUS_CODES[404]
@@ -113,8 +87,6 @@ module.exports = (env) ->
         
         env.logger.debug __("resource not found: %s", request.url)
         @emit('requestInvalid', request)
-        #response.write("Target Not Found!" )
-        #response.end()
         return
         
       env.logger.debug "piping request to StreamServer"
@@ -122,12 +94,10 @@ module.exports = (env) ->
         
     pause: () =>
       @_httpServer.close() if @_running
-      
-      @_httpServer = null
       @_running = false
     
     stop: () ->
-      @_httpServer.pause() if @_running
+      @pause() if @_running
       @_httpServer = null
     
     destroy: () ->

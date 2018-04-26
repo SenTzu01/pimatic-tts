@@ -143,17 +143,22 @@ module.exports = (env) ->
           
           
           @emit('state', true)
-          env.logger.debug __("outputDevice.type: '%s'", outputDevice.type)
+
           if outputDevice.type is 'upnp'
-            @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress})
-            #@_mediaServer.on('error', (error) => return Promise.reject error )
-            #@_mediaServer.on('clientError', (error) => return Promise.reject error)
-            @_mediaServer.create(resource).then( (url) =>
-              env.logger.debug "server created"
-              env.logger.debug __("url: %s", url)
-              resource = url
-              playback()
-            ).catch( (error) => Promise.reject error )
+            
+            outputDevice.getPresence().then( (presence) =>
+              env.logger.debug __("presence: %s", presence)
+              if !presence
+                @base.error __("Network media player %s was not detected. Unable to ouput Text-to-Speech", outputDevice.id)
+                resolve false
+              
+              @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress})
+              @_mediaServer.create(resource).then( (url) =>
+                env.logger.debug __("url: %s", url)
+                resource = url
+                playback()
+              ).catch( (error) => Promise.reject error )
+            )
           
           else
             playback()
@@ -161,9 +166,6 @@ module.exports = (env) ->
         ).catch( (error) => @base.rejectWithErrorString Promise.reject, error)
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
     
-    outputSpeech: (resource) =>
-      device = @getOutputDevice()
-      device.play(resource)
       
     _getResource: (text) =>
       env.logger.debug __("%s: Getting TTS Resource for text: '%s', language: '%s'", @id, text, @_options.language)
