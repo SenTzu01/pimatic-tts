@@ -11,7 +11,7 @@ module.exports = (env) ->
     constructor: (@config, lastState, @_plugin) ->
       @id = @config.id
       @name = @config.name
-      @debug = true || @config.debug || false
+      @debug = @_plugin.config.debug || false
       @base = commons.base @, "DLNAPlayerDevice"
       @_detected = false
       @_pauseUpdates = false
@@ -72,7 +72,7 @@ module.exports = (env) ->
       super(presence)
       
     _setDevice: (device) ->
-      @base.debug __("Updating network device information for %s", @id)
+      @base.debug __("Updating network device information")
       @_device = device unless @_pauseUpdates
       @type = device.type
       @emit 'host', device.host
@@ -85,12 +85,12 @@ module.exports = (env) ->
     getHost: () -> Promise.resolve(@_device?.host or '0.0.0.0')
       
     _onPlayerEvent: (event, data) => 
-      @base.debug __("%s Network media player: %s", @id, event)
+      @base.debug __("Network media player: %s", event)
       @emit(event, data)
       
     playAudio: (url) -> 
       return new Promise( (resolve, reject) =>
-        env.logger.debug __("Starting audio output via: %s", @id)
+        @base.debug __("Starting audio output")
         
         @_pauseUpdates = true
         @_device.once('loading', (data) => @_onPlayerEvent('loading', data) )
@@ -99,7 +99,8 @@ module.exports = (env) ->
         
         @_device.once('error', (error) => 
           @_onPlayerEvent('error', error)
-          reject error
+          @base.resetLastError()
+          @base.rejectWithErrorString( Promise.reject, error, __("Media player error during playback of: %s", url) )
         )
         
         @_device.once('stopped', (data) =>
@@ -109,15 +110,11 @@ module.exports = (env) ->
         )
         
         play = @_device.play(url, 0)
-        env.logger.debug @_device
-        
-      ).catch( (error) =>
-        reject error
+        #env.logger.debug @_device
       )
       
     stopDlnaStreaming: () -> 
-      return Promise.reject __('%s is not present. Cannot stop player', @_device.name) unless @_presence
-      @_device.stop()
+      @_device.stop() if @_presence
         
           
   return DLNAPlayerDevice

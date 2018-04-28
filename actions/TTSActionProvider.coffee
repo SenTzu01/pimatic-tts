@@ -8,7 +8,9 @@ module.exports = (env) ->
   class TTSActionProvider extends env.actions.ActionProvider
     
     constructor: (@framework, @config) ->
-      @base = commons.base @, 'Pimatic-TTS-TTSActionProvider'
+      @base = commons.base @, 'tts-ActionProvider'
+      
+      super()
       
     parseAction: (input, context) =>
       device = null
@@ -20,15 +22,29 @@ module.exports = (env) ->
         },
         speech: {
           resource: '',
-          volume: null,
+          volume: {
+            input: null,
+            parsed: null
+          },
           repeat: {
-            number: null,
-            interval: null
+            number: {
+              input: null,
+              parsed: null
+            },
+            interval: {
+              input: null,
+              parsed: null
+            }
           }
         },
         output: {
-          device: null
-          volume: null
+          device: null,
+          cache: null,
+          resource: null,
+          volume: {
+            input: null,
+            parsed: null
+          }
         }
       }
       
@@ -43,18 +59,18 @@ module.exports = (env) ->
       
       setSpeechVolume = (m) =>
         m.match([" with volume "]).matchNumericExpression( (m, v) =>
-          ttsSettings.speech.volume = v
-          ttsSettings.output.volume = v
+          ttsSettings.speech.volume.input = v
+          ttsSettings.output.volume.input = v
         )
       
       setSpeechRepeatNumber = (m) =>
         m.match([" repeating "]).matchNumericExpression( (m, r) =>
-          ttsSettings.speech.repeat.number = r
+          ttsSettings.speech.repeat.number.input = r
         ).match([" times"])
       
       setSpeechRepeatInterval = (m) =>
         m.match([" every "]).matchNumericExpression( (m, w) =>
-          ttsSettings.speech.repeat.interval = w
+          ttsSettings.speech.repeat.interval.input = w
         ).match([" s", " seconds"])
       
       setOutputDevice = (m) =>
@@ -64,10 +80,10 @@ module.exports = (env) ->
         
       setDevice = (m, d) =>
         device = d
-        ttsSettings.speech.volume = [d.config.volume]
-        ttsSettings.output.volume = [d.config.volume]
-        ttsSettings.speech.repeat.number = [d.config.repeat]
-        ttsSettings.speech.repeat.interval = [d.config.interval]
+        ttsSettings.speech.volume.input = [d.config.volume]
+        ttsSettings.output.volume.input = [d.config.volume]
+        ttsSettings.speech.repeat.number.input = [d.config.repeat]
+        ttsSettings.speech.repeat.interval.input = [d.config.interval]
       
       m = M(input, context)
         .match(["speak ", "Speak ", "say ", "Say "])
@@ -85,54 +101,59 @@ module.exports = (env) ->
         return {
           token: match
           nextInput: input.substring(match.length)
-          actionHandler: new TTSActionHandler(@framework, @config, device, ttsSettings)
+          actionHandler: new TTSActionHandler(@framework, device, ttsSettings)
         }
       else
         return null
   
   class TTSActionHandler extends env.actions.ActionHandler
   
-    constructor: (@framework, @config, @_device, @_ttsSettings) ->
-      @base = commons.base @, 'Pimatic-TTS-TTSActionHandler'
+    constructor: (@framework, @_device, @_ttsSettings) ->
+      @base = commons.base @, 'tts-ActionHandler'
+      
       super()
       
     setup: () ->
       @dependOnDevice(@_device)
-      @dependOnDevice(@ttsSettings.output.device) if @ttsSettings?.output?.device?
+      @dependOnDevice(@_ttsSettings.output.device) if @_ttsSettings?.output?.device?
+      
       super()
     
     executeAction: (simulate) =>
-      return new Promise( (resolve, reject) =>
-        return Promise.join(
-          @framework.variableManager.evaluateStringExpression(@_ttsSettings.text.input),
-          @framework.variableManager.evaluateNumericExpression(@_ttsSettings.speech.volume),
-          @framework.variableManager.evaluateNumericExpression(@_ttsSettings.output.volume),
-          @framework.variableManager.evaluateNumericExpression(@_ttsSettings.speech.repeat.number),
-          @framework.variableManager.evaluateNumericExpression(@_ttsSettings.speech.repeat.interval),
-          (text, speechVolume, outputVolume, repeat, interval) =>
-            @_ttsSettings.text.parsed = text
-            @_ttsSettings.speech.volume = speechVolume
-            @_ttsSettings.output.volume = outputVolume
-            @_ttsSettings.speech.repeat.number = repeat
-            @_ttsSettings.speech.repeat.interval = interval
-            @_ttsSettings.speech.repeat.interval = 0 if @_ttsSettings.speech.repeat.number < 2
+      Promise.join(
+        @framework.variableManager.evaluateStringExpression(@_ttsSettings.text.input),
+        @framework.variableManager.evaluateNumericExpression(@_ttsSettings.speech.volume.input)
+        @framework.variableManager.evaluateNumericExpression(@_ttsSettings.output.volume.input),
+        @framework.variableManager.evaluateNumericExpression(@_ttsSettings.speech.repeat.number.input),
+        @framework.variableManager.evaluateNumericExpression(@_ttsSettings.speech.repeat.interval.input),
+        (text, speechVolume, outputVolume, repeat, interval) =>
+          cfg = @_ttsSettings
+          cfg.text.parsed = text
+          cfg.speech.volume.parsed = speechVolume
+          cfg.output.volume.parsed = outputVolume
+          cfg.speech.repeat.number.parsed = repeat
+          cfg.speech.repeat.interval.parsed = interval
+          cfg.speech.repeat.interval.parsed = 0 if cfg.speech.repeat.number.parsed < 2
+          
+          if simulate
+            return Promise.resolve __("would convert Text to Speech: \"%s\"", cfg.text.parsed)
+          
+          else
+            @base.debug __("TTSActionHandler - Device: '%s', Text: '%s'", @_device.id, cfg.text.parsed)
             
-            env.logger.debug __("TTSActionHandler - Device: '%s', Text: '%s'", @_device.id, @_ttsSettings.text.parsed)
-            
-            if simulate
-              return __("would convert Text to Speech: \"%s\"", @_ttsSettings.text.parsed)
-            
-            else
-              
-              return @_device.textToSpeech(@_ttsSettings).then( (result) =>
-                resolve result
-                
-              ).catch( (error) =>
-                @base.rejectWithErrorString Promise.reject, error
-              )
-              
-        ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
-      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+            @_device.textToSpeech(cfg)
+            .then( (result) =>
+              return Promise.resolve result
+            )
+            .catch( (error) =>
+              @base.resetLastError()
+              return @base.rejectWithErrorString Promise.reject, error, __("There were error(s) executing rule action")
+            )
+      )
+      .catch( (error) =>
+        @base.error error
+        return Promise.resolve true
+      )
     
     destroy: () ->
       super()
