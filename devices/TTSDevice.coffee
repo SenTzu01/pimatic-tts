@@ -93,17 +93,14 @@ module.exports = (env) ->
         if @getOutputDevice().type is 'upnp'
           
           @getOutputDevice().getPresence().then( (presence) =>
-            base.rejectWithErrorString Promise.reject, new Error( __("Network media player %s was not detected. Unable to ouput speech", @getOutputDevice().id) ) if !presence
+            return base.rejectWithErrorString Promise.reject, new Error( __("Network media player %s was not detected. Unable to ouput speech", @getOutputDevice().id) ) if !presence
             
             @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress})
             @_mediaServer.create(resource)
           )
           .then( (url) =>
             @_setResource(url)
-            @_outputSpeech()
-          )
-          .then( (result) =>
-            return Promise.resolve result
+            return @_outputSpeech()
           )
           .catch( (error) =>
             return Promise.reject error
@@ -114,9 +111,6 @@ module.exports = (env) ->
         
         else
           @_outputSpeech()
-          .then( (result) =>
-            return Promise.resolve result
-          )
           .catch( (error) =>
             return Promise.reject error
           )

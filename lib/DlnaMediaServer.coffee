@@ -93,24 +93,30 @@ module.exports = (env) ->
       
     halt: () =>
       return new Promise ( (resolve, reject) =>
-        @_httpServer.close() if @_running
+        if @_running
+          @_httpServer.close( (error) =>
+            if error?
+              env.logger.error __("Error halting Mediaserver: %s", error.message)
+              env.logger.debug error.stack
+          )
         @_running = false
-        
         msg = __("Mediaserver halted")
         env.logger.debug msg
         resolve msg
       )
     
     stop: () ->
-      return new Promise( (resolve, reject) =>
-        @halt()
-        .then( () =>
-          @_httpServer = null
-          
-          msg = __("Mediaserver shut down")
-          env.logger.debug msg
-          resolve msg
-        )
+      @halt()
+      .catch( (error) =>
+        env.logger.error __("Error shutting down Mediaserver: %s", error.message)
+        env.logger.debug error.stack
+      )
+      .finally( () =>
+        @_httpServer = null
+        
+        msg = __("Mediaserver shut down")
+        env.logger.debug msg
+        return Promise.resolve msg
       )
     
     destroy: () ->

@@ -112,6 +112,10 @@ module.exports = (env) ->
         play = @_device.play(url, 0)
         #env.logger.debug @_device
       )
+      .catch( (error) =>
+        @base.resetLastError()
+        @base.rejectWithErrorString Promise.reject, error
+      )
       
     stopDlnaStreaming: () -> 
       @_device.stop() if @_presence
