@@ -141,7 +141,7 @@ module.exports = (env) ->
             
             i++
             results.push(result)
-            #interval = 10 if i is @getSessionRepeat()
+            interval = 1 if i is @getSessionRepeat()
           )
           .delay( interval*1000 )
           .catch( (error) =>
