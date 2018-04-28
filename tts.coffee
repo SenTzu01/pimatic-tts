@@ -102,7 +102,7 @@ module.exports = (env) ->
       
       device = @framework.deviceManager.addDeviceByConfig({
         id: dlnaConfig.id
-        name: __("%s (%s)", dlnaConfig.name, dlnaConfig.type.toUpperCase())
+        name: __("Media Server %s", dlnaConfig.name)
         class: OutputProviders.DLNA.device })
       
       if device?

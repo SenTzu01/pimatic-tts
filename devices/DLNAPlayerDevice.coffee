@@ -110,7 +110,7 @@ module.exports = (env) ->
         )
         
         play = @_device.play(url, 0)
-        #env.logger.debug @_device
+        env.logger.debug @_device
       )
       .catch( (error) =>
         @base.resetLastError()

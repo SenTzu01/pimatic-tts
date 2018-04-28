@@ -39,6 +39,7 @@ module.exports = (env) ->
     _dlnaDeviceFound: (config) =>
       @base.debug __("DLNA device discovered: %s, configuring and emitting config", config.name)
       config.id = @_createDeviceId(config.name)
+      config.name = @_safeString(config.name, ' ')
       @emit('new', config)
       
     _discoveryStop: () =>
@@ -60,6 +61,7 @@ module.exports = (env) ->
         @_discoveryStopTimer = setTimeout(@_discoveryStop, @_duration)
         @_discoveryStartTimer = setTimeout(@_discoveryStart, @_interval)
     
-    _createDeviceId: (id) -> return 'dlna-' + id.replace(/(^[\W]|[\W]$)/g, '').replace(/[\W]+/g, '-').toLowerCase()
+    _safeString: (name, char) -> return name.replace(/(^[\W]|[\W]$)/g, '').replace(/[\W]+/g, char)
+    _createDeviceId: (id) -> return 'dlna-' + @_safeString(id, '-').toLowerCase()
     
   return DlnaDiscovery

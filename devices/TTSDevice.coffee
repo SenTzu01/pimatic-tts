@@ -93,7 +93,7 @@ module.exports = (env) ->
         if @getOutputDevice().type is 'upnp'
           
           @getOutputDevice().getPresence().then( (presence) =>
-            return base.rejectWithErrorString Promise.reject, new Error( __("Network media player %s was not detected. Unable to ouput speech", @getOutputDevice().id) ) if !presence
+            return @base.rejectWithErrorString Promise.reject, new Error( __("Network media player %s was not detected. Unable to ouput speech", @getOutputDevice().id) ) if !presence
             
             @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress})
             @_mediaServer.create(resource)
@@ -135,7 +135,7 @@ module.exports = (env) ->
             
             i++
             results.push(result)
-            interval = 1 if i is @getSessionRepeat()
+            interval = 1 if i >= @getSessionRepeat()
           )
           .delay( interval*1000 )
           .catch( (error) =>
