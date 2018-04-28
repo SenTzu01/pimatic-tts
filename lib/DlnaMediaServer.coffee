@@ -30,6 +30,7 @@ module.exports = (env) ->
           reject error
         )
         @_httpServer.on('clientError', (error = new Error("Undefined media player error")) =>
+          env.logger.error(error.message)
           @emit('clientError', error)
         )
         @_httpServer.on('connection', () =>
@@ -38,6 +39,7 @@ module.exports = (env) ->
         )
         @_httpServer.on('connect', (request, socket, head) =>
           env.logger.debug __("client: %s connected", socket.remoteAddress)
+          @emit('clientConnected', socket.remoteAddress)
         )
         @_httpServer.on('close', () =>
           env.logger.debug __("Server connection closed" )
@@ -60,14 +62,18 @@ module.exports = (env) ->
         env.logger.debug __("New request from %s: method: %s, URL: %s", request.socket.remoteAddress, request.method, request.url)
         
         response.on('close', () =>
-          @emit('responseClose', new Error("Server prematurely closed the connection") ) 
+          msg = _("Server prematurely closed the connection")
+          env.logger.error msg
+          @emit('responseClose', new Error(msg) ) 
         )
         response.on('finish', () => 
           env.logger.debug __("Server responded to request")
           @emit('responseComplete', response) 
         )
         request.on('aborted', () =>
-          @emit('requestAborted', new Error("Client prematurely aborted the request") ) 
+          msg = __("Client prematurely aborted the request")
+          env.logger.error msg
+          @emit('requestAborted', new Error(msg) ) 
         )
         request.on('close', () => 
           env.logger.debug __("Client closed connection") 

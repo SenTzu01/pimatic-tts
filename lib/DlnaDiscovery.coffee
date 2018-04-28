@@ -40,6 +40,7 @@ module.exports = (env) ->
       @base.debug __("DLNA device discovered: %s, configuring and emitting config", config.name)
       config.id = @_createDeviceId(config.name)
       config.name = @_safeString(config.name, ' ')
+      env.logger.debug config
       @emit('new', config)
       
     _discoveryStop: () =>
