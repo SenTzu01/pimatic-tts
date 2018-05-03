@@ -3,7 +3,7 @@ module.exports = (env) ->
   _ = env.require 'lodash'
   Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
-  DlnaDiscovery = require('./lib/DlnaDiscovery')(env)
+  MediaPlayerDiscovery = require('./lib/MediaPlayerDiscovery')(env)
   os = require('os')
   
   TTSProviders =
@@ -27,7 +27,7 @@ module.exports = (env) ->
       @debug = @config.debug || false
       @base = commons.base @, 'Plugin'
       
-      @_dlnaBrowser = null
+      @_browser = null
       @_inetAddresses = []
       
       @_configureMediaServerAddress()
@@ -75,46 +75,43 @@ module.exports = (env) ->
       actionProviderClass = require('./actions/TTSActionProvider')(env)
       @framework.ruleManager.addActionProvider(new actionProviderClass(@framework, @config))
 
-      @_discoverNetworkPlayers() if @config.enableDiscovery
+      @_discoverMediaPlayers() if @config.enableDiscovery
       
     
     
-    _discoverNetworkPlayers: () =>
+    _discoverMediaPlayers: () =>
       discoveryInterval = ( @config.discoveryInterval ? 30 )*1000
       discoveryDuration = ( @config.discoveryTimeout ? 10 )*1000
       discoveryInterval = discoveryDuration*2 unless discoveryInterval > discoveryDuration*2
       
-      @_dlnaBrowser = new DlnaDiscovery(discoveryInterval, discoveryDuration, false)
-      @_dlnaBrowser.on('new', (config) =>
+      @_browser = new MediaPlayerDiscovery(discoveryInterval, discoveryDuration, @debug)
+      @_browser.on('new', (config) =>
       
-        @emit('dlnaDeviceDiscovered', config)
-        @_createDeviceFromDlnaConfig(config) if @_isNewDevice(config.id)
+        @emit('discoveredMediaPlayer', config)
+        @_createDeviceFromConfig(config) if @_isNewDevice(config.id)
       )
-      @_dlnaBrowser.on('stop', =>
-        @emit 'dlnaDiscoveryEnd', true
+      @_browser.on('stop', =>
+        @emit 'discoveryEnd', true
       )
-      @_dlnaBrowser.start()
+      @_browser.start()
     
     
     
-    _createDeviceFromDlnaConfig: (dlnaConfig) =>
-      @base.debug __("Creating new network media player device: %s", dlnaConfig.name)
+    _createDeviceFromConfig: (device) =>
+      @base.debug __("Creating new network media player device: %s", device.getName())
       
       device = @framework.deviceManager.addDeviceByConfig({
-        id: dlnaConfig.id
-        name: __("Media Server %s", dlnaConfig.name)
+        id: device.id
+        name: __("Media Server %s", device.getName())
         class: OutputProviders.DLNA.device })
       
       if device?
-        device.updateDevice(dlnaConfig, true)
+        device.updateDevice(device, true)
       else 
-        @base.error __("Error creating new network media player device '%s'", dlnaConfig.id)
-    
-    
+        @base.error __("Error creating new network media player device '%s'", device.id)
     
     _isNewDevice: (id) -> 
       return !@framework.deviceManager.isDeviceInConfig(id)
-    
     
     
     _configureMediaServerAddress: () ->
