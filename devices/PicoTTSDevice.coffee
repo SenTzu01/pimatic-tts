@@ -9,7 +9,7 @@ module.exports = (env) ->
   
   class PicoTTSDevice extends TTSDevice
     
-    constructor: (@config, lastState) ->
+    constructor: (@config, lastState, @pluginConfig) ->
       @id = @config.id
       @name = @config.name
       
@@ -20,33 +20,39 @@ module.exports = (env) ->
       
     _setup: ->
       @_setAudioDecoder(wav.Reader)
-      @_audioFormat('wav')
+      @_setAudioFormat('wav')
       @_setExecutable(@config.executable ? '/usr/bin/pico2wav')
       @_setArguments((file, text) => return [ '-l', @_options.language, '-w', file, text])
     
     generateResource: (file, text) =>
       
       return new Promise( (resolve, reject) =>
+        app = spawn( @getExecutable(), @getArguments(file, text) )
         
-        app = spawn(@_options.executable, @_options.arguments(file, text))
         app.stdout.on( 'data', (data) =>
-          env.logger.debug __("%s output: %s", @_options.executable, data)
-        
+          env.logger.debug __("%s output: %s", exec, data)
+            
         )
+        
         app.stderr.on('data', (error) =>
           @base.rejectWithErrorString Promise.reject, error
-        
+            
         )
+        
         app.on('close', (code) =>
-          
+              
           if (code is 0)
             env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, text)
             resolve file
-          
+              
           else
             @base.rejectWithErrorString Promise.reject, error
         )
+      
       ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+    
+    getExecutable: -> @_options.executable
+    getArguments: -> @_options.arguments
     
     _setExecutable: (value) ->
       if value is @_options.executable then return

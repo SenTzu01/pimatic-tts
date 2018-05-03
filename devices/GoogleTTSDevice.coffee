@@ -12,10 +12,11 @@ module.exports = (env) ->
   
   class GoogleTTSDevice extends TTSDevice
     
-    constructor: (@config, lastState) ->
+    constructor: (@config, lastState, @pluginConfig) ->
       @id = @config.id
       @name = @config.name
       
+      @maxStringLenghtGoogle = 200
       @actions = _.cloneDeep @actions
       @attributes = _.cloneDeep @attributes
       
@@ -31,52 +32,41 @@ module.exports = (env) ->
         acronym: 'Voice Speed:'
         discrete: true})
       
+      
       super()
     
     _setup: ->
       @_setAudioFormat('mp3')
-      @_setAudioDecoder(lame.Decoder)
+      @_setAudioDecoder( lame.Decoder )
       @_setSpeed(@config.speed)
-      @_setMaxStringLength(200)
+      @_setMaxStringLength(@maxStringLenghtGoogle)
       
-    getSpeed: -> Promise.resolve(@_options.speed)
+    getSpeed: -> @_options.speed
+    getSpeedPercentage: -> @getSpeed() / 100
+    getMaxStringLength: -> @_options.maxStringLength
     
     generateResource: (file, text) =>
       
       return new Promise( (resolve, reject) =>
-        env.logger.debug __("@_conversionSettings.text.parsed.length: %s", text.length)
-        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, @_conversionSettings.text.parsed.length) unless text.length < @_options.maxStringLenght
+        @base.rejectWithErrorString Promise.reject, new Error( __("%s: A maximum of 200 characters is allowed.", @id, text.length) ) unless text.length < @getMaxStringLength()
         
-        env.logger.debug __("@_options.language: %s", @_options.language)
-        @getSpeed().then( (speed) =>
-          env.logger.debug __("@_options.speed: %s. Calculated speed: %s", @_options.speed, @_options.speed/100)
-          googleAPI(text, @_options.language, @_options.speed/100).then( (resource) =>
-            env.logger.debug __("resource: %s", resource)
+        @getLanguage().then( (language) =>
+          @base.debug __("@_options.language: %s", language)
+          @base.debug __("speed: %s. Calculated speed: %s", @getSpeed(), @getSpeedPercentage() )
+          
+          googleAPI( text, language, @getSpeedPercentage() ).then( (resource) =>
+            @base.debug __("resource: %s", resource)
             
-            resRead = request.get(resource)
+            readStream = request.get(resource)
               .on('error', (error) =>
-                msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
-                env.logger.debug msg
-                @base.rejectWithErrorString Promise.reject, msg
+                @base.rejectWithErrorString Promise.reject, error, __("Failure reading audio resource '%s'.", resource)
               )
-              
-            fsWrite = fs.createWriteStream(file)
-              .on('finish', () =>
-                fsWrite.close( () => 
-                        
-                  env.logger.info __("%s: Speech resource for '%s' successfully generated.", @id, text)
-                  env.logger.debug __("file: %s", file)
-                  resolve file
-                )
-              )
-              .on('error', (error) =>
-                fs.unlink(file)
-                @base.rejectWithErrorString Promise.reject, error
-              )
-            resRead.pipe(fsWrite)
+            @_writeResource(readStream, file).then( (file) =>
+              resolve file
+            )
           )
-        ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
-      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+        )
+      )
     
     _setSpeed: (value) ->
       if value is @_options.speed then return
@@ -88,7 +78,6 @@ module.exports = (env) ->
       @_options.maxStringLength = value
       @emit 'maxStringLength', value
     
-
     destroy: () ->
       super()
   

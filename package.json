@@ -10,10 +10,9 @@
     "actions",
     "devices",
     "resources",
+    "lib",
     "tts.coffee",
     "tts-config-schema.coffee",
-    "google-device-config-schema.coffee",
-    "pico-device-config-schema.coffee",
     "LICENSE",
     "README.md"
   ],
@@ -51,34 +50,15 @@
     "lame": "^1.1.2",
     "pcm-volume": "^1.0.0",
     "speaker": "^0.4.1",
-    "wav": "^1.0.1"
+    "wav": "^1.0.1",
+    "castv2-client": "^1.2.0",
+    "upnp-device-client": "^1.0.2",
+    "elementtree": "^0.1.7",
+    "mediaserver": "^0.1.1"
   },
   "optionalDependencies": {},
   "engines": {
     "node": ">0.8.x",
     "npm": ">1.1.x"
-  },
-  "gitHead": "44bd52c061eadbde2b16d85dd9db77848879bb79",
-  "_id": "pimatic-tts@0.0.5",
-  "scripts": {},
-  "_shasum": "8edb4b92d1f941c632be55038cd822db4b332fb0",
-  "_from": "pimatic-tts@0.0.5",
-  "_npmVersion": "2.15.11",
-  "_nodeVersion": "4.8.7",
-  "_npmUser": {
-    "name": "sentzu01",
-    "email": "sentzu01@gmail.com"
-  },
-  "dist": {
-    "shasum": "8edb4b92d1f941c632be55038cd822db4b332fb0",
-    "tarball": "https://registry.npmjs.org/pimatic-tts/-/pimatic-tts-0.0.5.tgz",
-    "fileCount": 14,
-    "unpackedSize": 72199
-  },
-  "directories": {},
-  "_npmOperationalInternal": {
-    "host": "s3://npm-registry-packages",
-    "tmp": "tmp/pimatic-tts_0.0.5_1522628463247_0.3148869833117298"
-  },
-  "_resolved": "https://registry.npmjs.org/pimatic-tts/-/pimatic-tts-0.0.5.tgz"
+  }
 }
