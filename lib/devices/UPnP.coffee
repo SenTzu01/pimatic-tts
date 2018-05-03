@@ -13,12 +13,7 @@ module.exports = (env) ->
     ]
     
     constructor: (opts) ->
-      super()
-      @_host = opts.address
-      @_name = opts.name
-      @_xml = opts.xml
-      @_type = opts.type
-      @_player = null
+      super(opts)
 
     play: (url, timestamp) =>
       opts = {

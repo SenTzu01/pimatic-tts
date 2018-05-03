@@ -17,9 +17,9 @@ module.exports = (env) ->
     ]
     
     _TRANSPORT_STATES: {
-      TRANSITIONING: 'loading',
-      PLAYING: 'playing',
-      PAUSED_PLAYBACK: 'paused',
+      TRANSITIONING: 'loading'
+      PLAYING: 'playing'
+      PAUSED_PLAYBACK: 'paused'
       STOPPED: 'stopped'
     }
     
@@ -187,11 +187,10 @@ module.exports = (env) ->
         @_receivedState = true
         return
       
-      @emit(@_TRANSPORT_STATES[e.TransportState]) if e.hasOwnProperty('TransportState')
+      @emit(@_TRANSPORT_STATES[e.TransportState], ) if e.hasOwnProperty('TransportState')
       @emit( 'speedChanged', Number(e.TransportPlaySpeed) ) if e.hasOwnProperty('TransportPlaySpeed')
     
     _formatTime: (seconds) ->
-    
       h = Math.floor((seconds - (h * 0)     - (m * 0 )) / 3600)
       m = Math.floor((seconds - (h * 3600)  - (m * 0 )) / 60)
       s =            (seconds - (h * 3600)  - (m * 60))
@@ -201,7 +200,6 @@ module.exports = (env) ->
     
     _parseTime: (time) ->
       parts = time.split(':').map(Number)
-      
       return parts[0] * 3600 + parts[1] * 60 + parts[2]
     
     _buildMetadata: (metadata) =>
@@ -261,6 +259,6 @@ module.exports = (env) ->
         
         return xml
     
-    _noOp: () ->
+    _noOp: () -> return undefined
     
   return MediaPlayerController

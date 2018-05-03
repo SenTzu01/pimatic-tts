@@ -10,7 +10,7 @@ module.exports = (env) ->
     constructor: (@config, lastState, @_plugin) ->
       @id = @config.id
       @name = @config.name
-      @debug = @_plugin.config.debug || false
+      @debug = @_plugin.config.debug || @config.debug || false
       @base = commons.base @, "DLNAPlayerDevice"
       @_detected = false
       @_pauseUpdates = false
@@ -40,33 +40,27 @@ module.exports = (env) ->
         description: "Stream a media resource to the DLNA device"
         params:
           url:
-            type: t.string
-      })
+            type: t.string})
       
       @addAction('playAudio', {
         description: "Stream a media resource to the DLNA device"
         params:
           resource:
-            type: t.string
-      })
+            type: t.string})
       
       @addAction('stopDlnaStreaming', {
         description: "Stop playback on the DLNA Device"})
       
       @_plugin.on('discoveredMediaPlayer', @updateDevice)
-      
-      onDiscoveryEnd = () =>
-        @_setPresence(false) if !@_detected
-        @_detected = false
-      @_plugin.on('discoveryEnd', onDiscoveryEnd)
+      @_plugin.on('discoveryEnd', @_onDiscoveryEnd)
       
       super()
 
     destroy: ->
-      @_plugin.removeListener('discoveryEnd', onDiscoveryEnd)
+      @_plugin.removeListener('discoveryEnd', @_onDiscoveryEnd)
       @_plugin.removeListener('discoveredMediaPlayer', @updateDevice)
       super()
-      
+        
     updateDevice: (device) =>
       return unless device.id is @id 
       @_setDevice(device)
@@ -119,5 +113,9 @@ module.exports = (env) ->
         return @base.rejectWithErrorString( Promise.reject, error, __("Media player error during playback of: %s", url) )
       
       return @emit(event, data)
-  
+    
+    _onDiscoveryEnd: () =>
+      @_setPresence(false) if !@_detected
+      @_detected = false
+      
   return DLNAPlayerDevice

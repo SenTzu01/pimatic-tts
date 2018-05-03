@@ -4,25 +4,36 @@ module.exports = (env) ->
   dgram = require('dgram')
   
   class SSDP extends events.EventEmitter
-    _BROADCAST_ADDR: '239.255.255.250'
-    _BROADCAST_PORT: 1900
-    _SEND_INTERVAL: 5000
+    _MULTICAST_ADDR: '239.255.255.250'
+    _SSDP_PORT: 1900
+    _SEND_INTERVAL: 5*1000
     _SSDP_HEADER: /^([^:]+):\s*(.*)$/
     
-    constructor: (port) ->
-      super()
+    constructor: (port = 0, @debug) ->
       
-      @_mSearch = __('M-SEARCH * HTTP/1.1\r\nHost: %s:%s\r\nMan: "ssdp:discover"\r\nST: $st\r\nMX: 3\r\n\r\n', @_BROADCAST_ADDR, @_BROADCAST_PORT)
-      
-      @_interval = null
+      @_mSearch  = 'M-SEARCH * HTTP/1.1\r\n'
+      @_mSearch += __("Host: %s:%s\r\n", @_MULTICAST_ADDR, @_SSDP_PORT)
+      @_mSearch += 'Man: "ssdp:discover"\r\n'
+      @_mSearch += 'ST: $st\r\n'
+      @_mSearch += 'MX: 3\r\n\r\n'
       @_processed = []
+      @_interval = null
       
       @_socket = dgram.createSocket('udp4')
-      @_socket.on('message', @_parseResponse)
-      
-      @_socket.bind(port, () =>
-        @_socket.addMembership(@_BROADCAST_ADDR)
-      )
+        .on('message', (message, rinfo) =>
+          return if @_processed.indexOf(rinfo.address) != -1 or @_getStatusCode(message.toString()) != 200
+          
+          @_parseResponse(message, rinfo)
+        )
+        
+        .on('listening', () =>
+          @_socket.addMembership(@_MULTICAST_ADDR)
+          
+          ip = @_socket.address()
+          env.logger.debug __("Listening on %s:%s for ssdp announcements", ip.address, ip.port)
+        )
+        
+        .bind(port)
     
     destroy: () ->
       @_socket.close()
@@ -36,22 +47,15 @@ module.exports = (env) ->
       send()
       @_interval = setInterval( send, @_SEND_INTERVAL )
     
-    onResponse: (callback) => @on('response', callback)
-    
     _sendDatagram: (st) =>
       message = new Buffer( @_mSearch.replace('$st', st), 'ascii' )
-      @_socket.send(message, 0, message.length, @_BROADCAST_PORT, @_BROADCAST_ADDR)
+      @_socket.send(message, 0, message.length, @_SSDP_PORT, @_MULTICAST_ADDR)
       
     _parseResponse: (message, rinfo) =>
-      return if @_processed.indexOf(rinfo.address) != -1
-      
-      response = message.toString()
-      return if @_getStatusCode(response) != 200
-      
-      headers = @_getHeaders(response)
-      
+      headers = @_getHeaders( message.toString() )
       @_processed.push(rinfo.address)
-      @emit('response', headers, rinfo)
+      
+      @emit('ssdpResponse', headers, rinfo)
     
     _getStatusCode: (res) =>
       lines = res.split('\r\n')

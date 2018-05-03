@@ -9,59 +9,81 @@ module.exports = (env) ->
 
   class SSDPBrowser extends events.EventEmitter
 
-    constructor: () ->
-      super()
+    constructor: (@debug = false) ->
       
-      @_chromecastSSDP = new SSDP(3333)
-      @_upnpSSDP = new SSDP(3334)
       @_devices = []
+      
+      @_chromecastSSDP = new SSDP()
+      @_upnpSSDP = new SSDP()
+      
+      @_chromecastSSDP.on('ssdpResponse', @_onSSDPResonse)
+      @_upnpSSDP.on('ssdpResponse', @_onSSDPResonse)
+      
+      @on('deviceFound', (device) =>
+        return unless @debug
+        env.logger.debug __("SSDPBrowser: New device discovered")
+        env.logger.debug devices
+      )
+      
+    destroy: () -> 
+      @_chromecastSSDP.destroy()
+      @_upnpSSDP.destroy()
+    
+    stop: () ->
+      @_chromecastSSDP.destroy()
+      @_upnpSSDP.destroy()
+    
+    start: () ->
+      @_searchChromecast()
+      @_searchUPnP()
+    
+    getList: () -> return @_devices
     
     _searchChromecast: () =>
-      
-      @_search(@_chromecastSSDP, (headers, rinfo, xml) =>
-        return if xml.search('<manufacturer>Google Inc.</manufacturer>') is -1
-        
+      @on('googleDevice', (headers, rinfo, xml) =>
+        type = 'chromecast'
         name = @_getFriendlyName(xml)
         return if !name?
         
         device = new Chromecast({
-          name: name,
+          id: @_createDeviceId(type, name)
+          name: __("Chromecast %s", @_safeString(name) )
           address: rinfo.address,
           xml: xml,
-          type: 'chc'
+          type: type
         })
         
         @_devices.push(device)
-        @emit('deviceOn', device)
+        @emit('deviceFound', device)
       )
       @_chromecastSSDP.search('urn:dial-multiscreen-org:service:dial:1')
     
     _searchUPnP: () =>
-    
-      @_search(@_upnpSSDP, (headers, rinfo, xml) =>
+      @on('genericDevice', (headers, rinfo, xml) =>
+        type = 'upnp'
         name = @_getFriendlyName(xml)
         return if !name?
         
         device = new UPnP({
-          name: name,
+          id: @_createDeviceId(type, name)
+          name: __("Media player %s", @_safeString(name, ' ') )
           address: rinfo.address,
           xml: headers['LOCATION'],
-          type: 'upnp'
+          type: type
         })
         
         @_devices.push device
-        @emit('deviceOn', device)
+        @emit('deviceFound', device)
       )
-      
       @_upnpSSDP.search('urn:schemas-upnp-org:device:MediaRenderer:1')
     
-    _search: (ssdp, callback) =>
-      ssdp.onResponse( (headers, rinfo) =>
-        return if !headers['LOCATION'] or headers['LOCATION'].indexOf('https://') != -1
-        
-        @_getXML(headers['LOCATION'], (xml) =>
-          callback(headers, rinfo, xml)
-        )
+    _onSSDPResonse: (headers, rinfo) =>
+      return if !headers['LOCATION'] or headers['LOCATION'].indexOf('https://') != -1
+      
+      @_getXML(headers['LOCATION'], (xml) =>
+        vendor = 'generic'
+        vendor = 'google' if xml.search('<manufacturer>Google Inc.</manufacturer>') != -1
+        @emit( __("%sDevice", vendor), headers, rinfo, xml)
       )
     
     _getXML: (address, callback) =>
@@ -77,19 +99,8 @@ module.exports = (env) ->
       return if !matches?
       
       return matches[1]
-  
-    start: () ->
-      @_searchChromecast()
-      @_searchUPnP()
-      
-    destroy: () ->
-      @_chromecastSSDP.destroy()
-      @_upnpSSDP.destroy()
     
-    onDevice: (callback) => @on('deviceOn', (device) =>
-      callback(device)
-    )
-
-    getList: () -> return @_devices
-
+    _safeString: (string, char) => return string.replace(/(^[\W]|[\W]$)/g, '').replace(/[\W]+/g, char)
+    _createDeviceId: (type, name) => return __("%s-%s", type, @_safeString(name, '-').toLowerCase() )
+    
   return SSDPBrowser

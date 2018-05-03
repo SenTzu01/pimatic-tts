@@ -10,60 +10,49 @@ module.exports = (env) ->
   class MediaPlayerDiscovery extends events.EventEmitter
     
     constructor: (@_browseInterval, @_browseDuration, @debug = false) ->
-      super()
-      
       @base = commons.base @, 'MediaPlayerDiscovery'
       
-      @_browseInterval ?= 30 *1000
-      @_browseDuration ?= 10 *1000
+      @base.error __("Instance creation failed. _browseInterval and _browseDuration parameters must be passed to the constructor") if !@_browseInterval? or !@_browseDuration?
       
+      @_browser = null
       @_timerStartBrowser = null
       @_timerStopBrowser = null
       
-      @_browser = null
-      
     destroy: () ->
+      clearTimeout @_timerStartBrowser if @_timerStartBrowser?
+      clearTimeout @_timerStopBrowser if @_timerStopBrowser?
       @_stopBrowser()
-      
-      @removeAllListeners('start')
-      @removeAllListeners('stop')
-      @removeAllListeners('device')
     
     start: () -> @_startBrowser()
-    stop: () -> @_stopBrowser()
+      
+    stop: () ->
+      @base.debug _("Stopping SSDP discovery due to external instruction")
+      clearTimeout @_timerStartBrowser if @_timerStartBrowser?
+      clearTimeout @_timerStopBrowser if @_timerStopBrowser?
+      @_stopBrowser()
     
-    _foundDevice: (device) =>
+    _deviceFound: (device) =>
       @base.debug __("Media player discovered: %s, configuring and emitting config", device.getName() )
       
-      device.id = @_createDeviceId(device)
-      device.name = @_safeString(device.getName(), ' ')
-      
-      env.logger.debug device
-      @emit('new', device)
+      @emit('deviceDiscovered', device)
       
     _stopBrowser: () =>
-        @base.debug __("Media player discovery stopped")
-        
-        clearTimeout @_timerStartBrowser if @_timerStartBrowser?
-        clearTimeout @_timerStopBrowser if @_timerStopBrowser?
-        
-        if @_browser?
-          @_browser.destroy()
-          @_browser = null
-        @emit('stop', true)
+      if @_browser?
+        @_browser.destroy()
+        @_browser = null
+      
+      @base.debug __("Media player discovery stopped")
+      @emit('discoveryStopped', true)
     
     _startBrowser: () =>
-        @base.debug "Media player discovery started"
+      @base.debug "Media player discovery started"
         
-        @_browser = new Browser()
-        @_browser.onDevice(@_foundDevice)
-        @_browser.start()
-        @emit('start', true)
-        
-        @_timerStartBrowser = setTimeout(@_startBrowser, @_browseInterval)
-        @_timerStopBrowser = setTimeout(@_stopBrowser, @_browseDuration)
-    
-    _safeString: (string, char) => return string.replace(/(^[\W]|[\W]$)/g, '').replace(/[\W]+/g, char)
-    _createDeviceId: (device) => return __("%s-%s", device.getType(), @_safeString(device.getName(), '-').toLowerCase() )
-    
+      @_browser = new Browser(@debug)
+      @_browser.on('deviceFound', @_deviceFound)
+      @_browser.start()
+      @emit('discoveryStarted', true)
+      
+      @_timerStopBrowser = setTimeout(@_stopBrowser, @_browseDuration)
+      @_timerStartBrowser = setTimeout(@_startBrowser, @_browseInterval)
+
   return MediaPlayerDiscovery

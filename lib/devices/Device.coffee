@@ -4,20 +4,27 @@ module.exports = (env) ->
 
   class Device extends events.EventEmitter
     
-    constructor: () ->
-      super()
+    constructor: (opts) ->
+      
+      @id = opts.id
+      @name = opts.name
+      @_host = opts.address
+      @_xml = opts.xml
+      @_type = opts.type
+      
+      @_player = null
     
-    play: () -> @_InheritanceFailure()
+    play: () -> @_inheritanceFailure('play()')
+    stop: () -> @_inheritanceFailure('stop()')
     
-    stop: () -> @_InheritanceFailure()
-    
-    getName: () -> return @_name
+    getId: () -> return @id
+    getName: () -> return @name
     getHost: () -> return @_host
     getXML: () -> return @_xml
     getType: () -> return @_type
     
     onError: (callback) => @on('error', callback)
     
-    _InheritanceFailure: () -> throw new Error('Not implemented')
+    _inheritanceFailure: (method) -> throw new Error( __("Children of Device class must implement %s", method) )
 
   return Device

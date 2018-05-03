@@ -7,13 +7,9 @@ module.exports = (env) ->
   class Chromecast extends Device
 
     constructor: (opts) ->
-      super()
+      super(opts)
+      
       @_client = null
-      @_player = null
-      @_host = opts.address
-      @_name = opts.name
-      @_xml = opts.xml
-      @_type = opts.type
     
     destroy: () ->
       super()

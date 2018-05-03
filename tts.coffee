@@ -27,7 +27,7 @@ module.exports = (env) ->
       @debug = @config.debug || false
       @base = commons.base @, 'Plugin'
       
-      @_browser = null
+      @_listener = null
       @_inetAddresses = []
       
       @_configureMediaServerAddress()
@@ -77,42 +77,41 @@ module.exports = (env) ->
 
       @_discoverMediaPlayers() if @config.enableDiscovery
       
-    
-    
     _discoverMediaPlayers: () =>
-      discoveryInterval = ( @config.discoveryInterval ? 30 )*1000
-      discoveryDuration = ( @config.discoveryTimeout ? 10 )*1000
+      discoveryInterval = @_toMilliSeconds( @config.discoveryInterval ? 30 )
+      discoveryDuration = @_toMilliSeconds( @config.discoveryTimeout ? 10 )
       discoveryInterval = discoveryDuration*2 unless discoveryInterval > discoveryDuration*2
       
-      @_browser = new MediaPlayerDiscovery(discoveryInterval, discoveryDuration, @debug)
-      @_browser.on('new', (config) =>
+      @_listener = new MediaPlayerDiscovery(discoveryInterval, discoveryDuration, @debug)
+        .on('deviceDiscovered', (mplayer) =>
+          @emit('discoveredMediaPlayer', mplayer)
+          @_createPimaticDevice(mplayer) if @_isNewDevice(mplayer.id)
+        
+        )
+        .on('discoveryStopped', =>
+          @emit 'discoveryEnd', true
+        
+        )
+        .start()
+    
+    _createPimaticDevice: (mplayer) =>
+      return if !mplayer?.id? or !mplayer?.name?
+      @base.debug __("Creating new network media player device: %s", mplayer.name)
       
-        @emit('discoveredMediaPlayer', config)
-        @_createDeviceFromConfig(config) if @_isNewDevice(config.id)
-      )
-      @_browser.on('stop', =>
-        @emit 'discoveryEnd', true
-      )
-      @_browser.start()
-    
-    
-    
-    _createDeviceFromConfig: (device) =>
-      @base.debug __("Creating new network media player device: %s", device.getName())
-      
-      device = @framework.deviceManager.addDeviceByConfig({
-        id: device.id
-        name: __("Media Server %s", device.getName())
-        class: OutputProviders.DLNA.device })
+      cfg = {
+        id: mplayer.id
+        name: mplayer.name
+        class: OutputProviders.DLNA.device
+      }
+      device = @framework.deviceManager.addDeviceBymplayer(cfg)
       
       if device?
-        device.updateDevice(device, true)
-      else 
+        device.updateDevice(mplayer)
+      else
         @base.error __("Error creating new network media player device '%s'", device.id)
     
     _isNewDevice: (id) -> 
       return !@framework.deviceManager.isDeviceInConfig(id)
-    
     
     _configureMediaServerAddress: () ->
       @_inetAddresses = @_getConfiguredAddresses()
@@ -133,8 +132,6 @@ module.exports = (env) ->
       
       @base.info __("Address: %s has been configured", @config.address)
     
-    
-    
     _getConfiguredAddresses: () ->
       netInterfaces = []
       ifaces = os.networkInterfaces()
@@ -148,7 +145,7 @@ module.exports = (env) ->
         netInterfaces.push addresses if addresses?
       return netInterfaces
     
-    
+    _toMilliSeconds: (s) -> return s * 1000
     
     _getPimaticAddress: () ->
       appSettings = @framework.config?.settings
