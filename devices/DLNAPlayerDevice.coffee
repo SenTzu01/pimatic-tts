@@ -4,18 +4,25 @@ module.exports = (env) ->
   commons = require('pimatic-plugin-commons')(env)
   Promise = env.require 'bluebird'
   t = env.require('decl-api').types
-  util = require('util')
   
   class DLNAPlayerDevice extends env.devices.PresenceSensor
-
+    
     constructor: (@config, lastState, @_plugin) ->
       @id = @config.id
       @name = @config.name
-      @debug = true || @config.debug || false
+      @debug = @_plugin.config.debug || @config.debug || false
       @base = commons.base @, "DLNAPlayerDevice"
       @_detected = false
       @_pauseUpdates = false
       @_device = lastState?.device?.value or null
+      
+      @_playerEvents = {
+        loading: @_onPlayerEvent
+        playing: @_onPlayerEvent
+        paused: @_onPlayerEvent
+        stopped: @_onPlayerEvent
+        error: @_onPlayerEvent
+      }
       
       @addAttribute('type',{
         description: "DLNA Type"
@@ -33,91 +40,82 @@ module.exports = (env) ->
         description: "Stream a media resource to the DLNA device"
         params:
           url:
-            type: t.string
-      })
+            type: t.string})
       
       @addAction('playAudio', {
         description: "Stream a media resource to the DLNA device"
         params:
           resource:
-            type: t.string
-      })
+            type: t.string})
       
       @addAction('stopDlnaStreaming', {
         description: "Stop playback on the DLNA Device"})
       
-      @_plugin.on('dlnaDeviceDiscovered', @updateDevice)
-      
-      onDiscoveryEnd = () =>
-        @_setPresence(false) if !@_detected
-        @_detected = false
-      @_plugin.on('dlnaDiscoveryEnd', onDiscoveryEnd)
+      @_plugin.on('discoveredMediaPlayer', @updateDevice)
+      @_plugin.on('discoveryEnd', @_onDiscoveryEnd)
       
       super()
 
     destroy: ->
-      @_plugin.removeListener('dlnaDiscoveryEnd', onDiscoveryEnd)
-      @_plugin.removeListener('dlnaDeviceDiscovered', @updateDevice)
+      @_plugin.removeListener('discoveryEnd', @_onDiscoveryEnd)
+      @_plugin.removeListener('discoveredMediaPlayer', @updateDevice)
       super()
-      
+        
     updateDevice: (device) =>
       return unless device.id is @id 
       @_setDevice(device)
       @_setPresence(true)
       @_detected = true
-      
     
     _setPresence: (presence) ->
       return if presence is @_presence
       super(presence)
-      
+    
     _setDevice: (device) ->
-      @base.debug __("Updating network device information for %s", @id)
+      @base.debug __("Updating network device information")
       @_device = device unless @_pauseUpdates
-      @type = device.type
-      @emit 'host', device.host
+      @_type = device.getType()
+      @emit 'host', device.getHost()
       
-      @emit 'type', device.type
+      @emit 'type', device.getType()
       @emit('device', device)
     
     getDevice: () -> Promise.resolve(@_device)
-    getType: () -> Promise.resolve(@_device?.type or 'N/A')
-    getHost: () -> Promise.resolve(@_device?.host or '0.0.0.0')
-      
-    _onPlayerEvent: (event, data) => 
-      @base.debug __("%s Network media player: %s", @id, event)
-      @emit(event, data)
+    getType: () -> Promise.resolve(@_type or 'N/A')
+    getHost: () -> Promise.resolve(@_host or '0.0.0.0')
       
     playAudio: (url) -> 
       return new Promise( (resolve, reject) =>
-        env.logger.debug __("Starting audio output via: %s", @id)
+        @base.debug __("Starting audio output")
         
         @_pauseUpdates = true
-        @_device.once('loading', (data) => @_onPlayerEvent('loading', data) )
-        @_device.once('playing', (data) => @_onPlayerEvent('started', data) )
-        @_device.once('paused', (data) => @_onPlayerEvent('paused', data) )
-        
-        @_device.once('error', (error) => 
-          @_onPlayerEvent('error', error)
-          reject error
-        )
-        
-        @_device.once('stopped', (data) =>
-          @_onPlayerEvent('stopped', data)
-          @_pauseUpdates = false
-          resolve true
-        )
+        @_device.once( event, (data) => return handler(e, data) ) for event, handler of @_playerEvents
         
         play = @_device.play(url, 0)
         env.logger.debug @_device
-        
-      ).catch( (error) =>
-        reject error
+      )
+      .catch( (error) =>
+        @base.resetLastError()
+        @base.rejectWithErrorString Promise.reject, error
       )
       
-    stopDlnaStreaming: () -> 
-      return Promise.reject __('%s is not present. Cannot stop player', @_device.name) unless @_presence
-      @_device.stop()
-        
-          
+    stopDlnaStreaming: () -> @_device.stop() if @_device? and @_presence
+    
+    _onPlayerEvent: (event, data) => 
+      @base.debug __("Network media player: %s", event)
+      if event is 'stopped'
+        @_pauseUpdates = false
+        return Promise.resolve event
+      
+      if event is 'error'
+        @_pauseUpdates = false
+        @base.resetLastError()
+        return @base.rejectWithErrorString( Promise.reject, error, __("Media player error during playback of: %s", url) )
+      
+      return @emit(event, data)
+    
+    _onDiscoveryEnd: () =>
+      @_setPresence(false) if !@_detected
+      @_detected = false
+      
   return DLNAPlayerDevice

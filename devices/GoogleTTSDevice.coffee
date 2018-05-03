@@ -48,29 +48,25 @@ module.exports = (env) ->
     generateResource: (file, text) =>
       
       return new Promise( (resolve, reject) =>
-        env.logger.debug __("@_conversionSettings.text.parsed.length: %s", text.length)
-        
-        @base.rejectWithErrorString Promise.reject, __("%s: A maximum of 200 characters is allowed.", @id, text.length) unless text.length < @getMaxStringLength()
+        @base.rejectWithErrorString Promise.reject, new Error( __("%s: A maximum of 200 characters is allowed.", @id, text.length) ) unless text.length < @getMaxStringLength()
         
         @getLanguage().then( (language) =>
-          env.logger.debug __("@_options.language: %s", language)
-          env.logger.debug __("speed: %s. Calculated speed: %s", @getSpeed(), @getSpeedPercentage() )
+          @base.debug __("@_options.language: %s", language)
+          @base.debug __("speed: %s. Calculated speed: %s", @getSpeed(), @getSpeedPercentage() )
           
           googleAPI( text, language, @getSpeedPercentage() ).then( (resource) =>
-            env.logger.debug __("resource: %s", resource)
+            @base.debug __("resource: %s", resource)
             
             readStream = request.get(resource)
               .on('error', (error) =>
-                msg = __("%s: Failure reading audio resource '%s'. Error: %s", @id, resource, error)
-                env.logger.debug msg
-                @base.rejectWithErrorString Promise.reject, msg
+                @base.rejectWithErrorString Promise.reject, error, __("Failure reading audio resource '%s'.", resource)
               )
             @_writeResource(readStream, file).then( (file) =>
               resolve file
             )
           )
-        ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
-      ).catch( (error) => @base.rejectWithErrorString Promise.reject, error )
+        )
+      )
     
     _setSpeed: (value) ->
       if value is @_options.speed then return
