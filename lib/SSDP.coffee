@@ -23,6 +23,13 @@ module.exports = (env) ->
         .on('message', (message, rinfo) =>
           return if @_processed.indexOf(rinfo.address) != -1 or @_getStatusCode(message.toString()) != 200
           
+          env.logger.debug __("Received requested multicast response: ")
+          env.logger.debug __("SSPD device info:")
+          env.logger.debug(rinfo)
+          env.logger.debug __("SSDP Services announcement:")
+          env.logger.debug(message.toString())
+
+          
           @_parseResponse(message, rinfo)
         )
         
@@ -30,7 +37,7 @@ module.exports = (env) ->
           @_socket.addMembership(@_MULTICAST_ADDR)
           
           ip = @_socket.address()
-          env.logger.debug __("Listening on %s:%s for ssdp announcements", ip.address, ip.port)
+          env.logger.debug __("[SSDP] Listening on %s:%s for ssdp announcements", ip.address, ip.port)
         )
         
         .bind(port)
@@ -48,9 +55,12 @@ module.exports = (env) ->
       @_interval = setInterval( send, @_SEND_INTERVAL )
     
     _sendDatagram: (st) =>
+      env.logger.debug __("Sending UDP datagram:")
+      env.logger.debug @_mSearch.replace('$st', st)
+      
       message = new Buffer( @_mSearch.replace('$st', st), 'ascii' )
       @_socket.send(message, 0, message.length, @_SSDP_PORT, @_MULTICAST_ADDR)
-      
+    
     _parseResponse: (message, rinfo) =>
       headers = @_getHeaders( message.toString() )
       @_processed.push(rinfo.address)

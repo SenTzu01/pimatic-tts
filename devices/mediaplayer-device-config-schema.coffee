@@ -1,7 +1,7 @@
 module.exports = {
-  title: "DLNA device config schemas"
-  DLNAPlayerDevice: {
-    title: "DLNA Player device config options"
+  title: "Media player device config schemas"
+  MediaPlayerDevice: {
+    title: "Media player device config options"
     type: "object"
     properties:
       debug:

@@ -5,7 +5,7 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   t = env.require('decl-api').types
   
-  class DLNAPlayerDevice extends env.devices.PresenceSensor
+  class MediaPlayerDevice extends env.devices.PresenceSensor
     
     constructor: (@config, lastState, @_plugin) ->
       @id = @config.id
@@ -25,9 +25,9 @@ module.exports = (env) ->
       }
       
       @addAttribute('type',{
-        description: "DLNA Type"
+        description: "Device type"
         type: t.string
-        acronym: 'DLNA Type:'
+        acronym: 'Device type:'
         discrete: true})
             
       @addAttribute('host',{
@@ -118,4 +118,4 @@ module.exports = (env) ->
       @_setPresence(false) if !@_detected
       @_detected = false
       
-  return DLNAPlayerDevice
+  return MediaPlayerDevice

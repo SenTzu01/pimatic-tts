@@ -17,9 +17,9 @@ module.exports = (env) ->
       langResource: 'pico-tts-api-lang.json'
       
   OutputProviders =
-    'DLNA':
-      device: 'DLNAPlayerDevice'
-      deviceDef: 'dlnaplayer-device-config-schema'
+    'MediaPlayer':
+      device: 'MediaPlayerDevice'
+      deviceDef: 'mediaplayer-device-config-schema'
       
   class TextToSpeechPlugin extends env.plugins.Plugin
     
@@ -101,9 +101,9 @@ module.exports = (env) ->
       cfg = {
         id: mplayer.id
         name: mplayer.name
-        class: OutputProviders.DLNA.device
+        class: OutputProviders.MediaPlayer.device
       }
-      device = @framework.deviceManager.addDeviceBymplayer(cfg)
+      device = @framework.deviceManager.addDeviceByConfig(cfg)
       
       if device?
         device.updateDevice(mplayer)

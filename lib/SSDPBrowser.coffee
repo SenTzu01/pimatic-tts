@@ -22,7 +22,6 @@ module.exports = (env) ->
       @on('deviceFound', (device) =>
         return unless @debug
         env.logger.debug __("SSDPBrowser: New device discovered")
-        env.logger.debug devices
       )
       
     destroy: () -> 
@@ -47,12 +46,13 @@ module.exports = (env) ->
         
         device = new Chromecast({
           id: @_createDeviceId(type, name)
-          name: __("Chromecast %s", @_safeString(name) )
+          name: __("Chromecast client %s", @_safeString(name) )
           address: rinfo.address,
           xml: xml,
           type: type
         })
         
+        env.logger.debug device
         @_devices.push(device)
         @emit('deviceFound', device)
       )
@@ -60,7 +60,7 @@ module.exports = (env) ->
     
     _searchUPnP: () =>
       @on('genericDevice', (headers, rinfo, xml) =>
-        type = 'upnp'
+        type = 'generic'
         name = @_getFriendlyName(xml)
         return if !name?
         
@@ -72,6 +72,7 @@ module.exports = (env) ->
           type: type
         })
         
+        env.logger.debug device
         @_devices.push device
         @emit('deviceFound', device)
       )
