@@ -6,7 +6,7 @@ module.exports = (env) ->
   StreamServer = require('mediaserver')
   path = require('path')
   
-  class DlnaMediaServer extends events.EventEmitter
+  class MediaServer extends events.EventEmitter
 
     constructor: (@_opts = {port: 0} ) ->
       @_httpServer = null
@@ -34,7 +34,7 @@ module.exports = (env) ->
           @emit('clientError', error)
         )
         @_httpServer.on('connection', () =>
-          env.logger.debug __("Mediaserver server established a TCP socket connection")
+          env.logger.debug __("Media server server established a TCP socket connection")
           @emit('serverConnected')
         )
         @_httpServer.on('connect', (request, socket, head) =>
@@ -47,8 +47,8 @@ module.exports = (env) ->
         )
       
         @_httpServer.listen(@_opts.port, @_opts.address, () =>
-          env.logger.debug __("Mediaserver started on: ip: %s, port: %s", @_httpServer.address().address, @_httpServer.address().port)
-          env.logger.debug __("Mediaserver is serving media resource: %s", @_virtualResource)
+          env.logger.debug __("Media server started on: ip: %s, port: %s", @_httpServer.address().address, @_httpServer.address().port)
+          env.logger.debug __("Media server is serving media resource: %s", @_virtualResource)
         
           @_running = true
           resolve __("http://%s:%s%s", @_httpServer.address().address, @_httpServer.address().port, @_virtualResource)
@@ -102,11 +102,11 @@ module.exports = (env) ->
         if @_running
           @_httpServer.close( (error) =>
             if error?
-              env.logger.error __("Error halting Mediaserver: %s", error.message)
+              env.logger.error __("Error halting Media server: %s", error.message)
               env.logger.debug error.stack
           )
         @_running = false
-        msg = __("Mediaserver halted")
+        msg = __("Media server halted")
         env.logger.debug msg
         resolve msg
       )
@@ -114,13 +114,13 @@ module.exports = (env) ->
     stop: () ->
       @halt()
       .catch( (error) =>
-        env.logger.error __("Error shutting down Mediaserver: %s", error.message)
+        env.logger.error __("Error shutting down Media server: %s", error.message)
         env.logger.debug error.stack
       )
       .finally( () =>
         @_httpServer = null
         
-        msg = __("Mediaserver shut down")
+        msg = __("Media server shut down")
         env.logger.debug msg
         return Promise.resolve msg
       )
@@ -128,4 +128,4 @@ module.exports = (env) ->
     destroy: () ->
       @_stop()
       
-  return DlnaMediaServer
+  return MediaServer

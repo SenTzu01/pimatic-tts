@@ -8,7 +8,7 @@ module.exports = (env) ->
   Crypto = require('crypto')
   Volume = require('pcm-volume')
   Speaker = require('speaker')
-  MediaServer = require('../lib/DlnaMediaServer')(env)
+  MediaServer = require('../lib/MediaServer')(env)
   path = require('path')
   
   
