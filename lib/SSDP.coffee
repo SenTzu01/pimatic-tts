@@ -9,11 +9,11 @@ module.exports = (env) ->
     _SEND_INTERVAL: 5*1000
     _SSDP_HEADER: /^([^:]+):\s*(.*)$/
     
-    constructor: (port = 0, @debug) ->
+    constructor: (port = 0, @debug = false) ->
       
       @_mSearch  = 'M-SEARCH * HTTP/1.1\r\n'
-      @_mSearch += __("Host: %s:%s\r\n", @_MULTICAST_ADDR, @_SSDP_PORT)
-      @_mSearch += 'Man: "ssdp:discover"\r\n'
+      @_mSearch += __("HOST: %s:%s\r\n", @_MULTICAST_ADDR, @_SSDP_PORT)
+      @_mSearch += 'MAN: "ssdp:discover"\r\n'
       @_mSearch += 'ST: $st\r\n'
       @_mSearch += 'MX: 3\r\n\r\n'
       @_processed = []
@@ -22,12 +22,9 @@ module.exports = (env) ->
       @_socket = dgram.createSocket('udp4')
         .on('message', (message, rinfo) =>
           return if @_processed.indexOf(rinfo.address) != -1 or @_getStatusCode(message.toString()) != 200
-          
-          env.logger.debug __("Received requested multicast response: ")
-          env.logger.debug __("SSPD device info:")
-          env.logger.debug(rinfo)
-          env.logger.debug __("SSDP Services announcement:")
-          env.logger.debug(message.toString())
+          @_debug __("Received response from device: %s", rinfo.address)
+          @_debug __("Service announcement:")
+          @_debug(message.toString())
 
           
           @_parseResponse(message, rinfo)
@@ -37,7 +34,7 @@ module.exports = (env) ->
           @_socket.addMembership(@_MULTICAST_ADDR)
           
           ip = @_socket.address()
-          env.logger.debug __("[SSDP] Listening on %s:%s for ssdp announcements", ip.address, ip.port)
+          @_debug __("Listening on %s:%s for ssdp announcements", ip.address, ip.port)
         )
         
         .bind(port)
@@ -55,8 +52,8 @@ module.exports = (env) ->
       @_interval = setInterval( send, @_SEND_INTERVAL )
     
     _sendDatagram: (st) =>
-      env.logger.debug __("Sending UDP datagram:")
-      env.logger.debug @_mSearch.replace('$st', st)
+      @_debug __("Sending UDP datagram:")
+      @_debug @_mSearch.replace('$st', st)
       
       message = new Buffer( @_mSearch.replace('$st', st), 'ascii' )
       @_socket.send(message, 0, message.length, @_SSDP_PORT, @_MULTICAST_ADDR)
@@ -84,5 +81,9 @@ module.exports = (env) ->
       )
       
       return headers
+      
+    _debug: (msg) ->
+      env.logger.debug __("[SSDP] %s", msg) if @debug
+      
     
   return SSDP

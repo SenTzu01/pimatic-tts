@@ -78,11 +78,12 @@ module.exports = (env) ->
       @_discoverMediaPlayers() if @config.enableDiscovery
       
     _discoverMediaPlayers: () =>
+      port = 0
       discoveryInterval = @_toMilliSeconds( @config.discoveryInterval ? 30 )
       discoveryDuration = @_toMilliSeconds( @config.discoveryTimeout ? 10 )
       discoveryInterval = discoveryDuration*2 unless discoveryInterval > discoveryDuration*2
       
-      @_listener = new MediaPlayerDiscovery(discoveryInterval, discoveryDuration, @debug)
+      @_listener = new MediaPlayerDiscovery(discoveryInterval, discoveryDuration, @port, @debug)
         .on('deviceDiscovered', (mplayer) =>
           @emit('discoveredMediaPlayer', mplayer)
           @_createPimaticDevice(mplayer) if @_isNewDevice(mplayer.id)

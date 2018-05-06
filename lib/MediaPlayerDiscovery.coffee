@@ -9,7 +9,7 @@ module.exports = (env) ->
   
   class MediaPlayerDiscovery extends events.EventEmitter
     
-    constructor: (@_browseInterval, @_browseDuration, @debug = false) ->
+    constructor: (@_browseInterval, @_browseDuration, @port, @debug = false) ->
       @base = commons.base @, 'MediaPlayerDiscovery'
       
       @base.error __("Instance creation failed. _browseInterval and _browseDuration parameters must be passed to the constructor") if !@_browseInterval? or !@_browseDuration?
@@ -31,10 +31,7 @@ module.exports = (env) ->
       clearTimeout @_timerStopBrowser if @_timerStopBrowser?
       @_stopBrowser()
     
-    _deviceFound: (device) =>
-      @base.debug __("Media player discovered: %s, configuring and emitting config", device.getName() )
-      
-      @emit('deviceDiscovered', device)
+    _deviceFound: (device) => 
       
     _stopBrowser: () =>
       if @_browser?
@@ -47,8 +44,8 @@ module.exports = (env) ->
     _startBrowser: () =>
       @base.debug "Media player discovery started"
         
-      @_browser = new Browser(@debug)
-      @_browser.on('deviceFound', @_deviceFound)
+      @_browser = new Browser(@port, @debug) # @debug
+      @_browser.on( 'deviceFound', (device) => @emit('deviceDiscovered', device) )
       @_browser.start()
       @emit('discoveryStarted', true)
       

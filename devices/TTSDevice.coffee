@@ -76,6 +76,7 @@ module.exports = (env) ->
       
       @_options = {}
       @_options.volume = { setting: @config.volume, max: 150, min: 1, maxRel: 100 }
+      @_options.type = 'localAudio'
       
       @_mediaServer = null
       @_mediaServerAddress = @pluginConfig.address
@@ -89,48 +90,55 @@ module.exports = (env) ->
       
       @_createResource( @getText() ).then( (resource) =>
         @base.debug __(" Going to speak '%s', Repeating: %s times, every %s seconds", resource, @getSessionRepeat(), @getSessionInterval())
+        outputDevice = @getOutputDevice()
+        outputDevice.getType().then( (type) =>
+          if type != @_options.type
         
-        if @getOutputDevice().type is 'upnp'
-          
-          @getOutputDevice().getPresence().then( (presence) =>
-            return @base.rejectWithErrorString Promise.reject, new Error( __("Network media player %s was not detected. Unable to ouput speech", @getOutputDevice().id) ) if !presence
-            
-            @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress})
-            @_mediaServer.create(resource)
-          )
-          .then( (url) =>
-            @_setResource(url)
-            return @_outputSpeech()
-          )
-          .catch( (error) =>
-            return Promise.reject error
-          )
-          .finally( () =>
-            @_mediaServer.stop() if @_mediaServer?
-          )
-        
-        else
-          @_outputSpeech()
-          .catch( (error) =>
-            return Promise.reject error
-          )
-          
+            outputDevice.getPresence().then( (presence) =>
+              return @base.rejectWithErrorString Promise.reject, new Error( __("Network media player %s was not detected. Unable to ouput speech.", outputDevice.id) ) if !presence
+              
+              @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress}, @debug)
+              @_mediaServer.create(resource)
+            )
+            .then( (url) =>
+              @_setResource(url)
+              return @_outputSpeech(outputDevice, url)
+            )
+            .catch( (error) =>
+              return Promise.reject error
+            )
+            .finally( () =>
+              @_mediaServer.stop() if @_mediaServer?
+            )
+      
+          else
+            @_setResource(resource)
+            @_outputSpeech(outputDevice, resource)
+            .then( (result) =>
+              return Promise.resolve result
+            )
+            .catch( (error) =>
+              return Promise.reject error
+            )
+        )
       ).catch( (error) =>
         @base.resetLastError()
         @base.stack(error)
         return Promise.reject error
       )
     
-    _outputSpeech: () =>
+    _outputSpeech: (device, resource) =>
+      return @base.rejectWithErrorString Promise.reject, new Error( __("Unable to output Speech: device is null") ) if !device?
+      return @base.rejectWithErrorString Promise.reject, new Error( __("Unable to output Speech: resource is null") ) if !resource?
       return new Promise( (resolve, reject) =>
         i = 1
         interval = @getSessionInterval()
         results = []
+        
         outputWithDelayedRepeat = () =>
           @base.debug __("%s: Starting audio output for iteration: %s", @id, i)
           
-          result = @getOutputDevice().playAudio( @getResource() )
-          result.then( () =>
+          device.playAudio(resource).then( (result) =>
             @base.debug __("%s: Finished audio output for iteration: %s", @id, i)
             
             i++
@@ -139,7 +147,7 @@ module.exports = (env) ->
           )
           .delay( interval*1000 )
           .catch( (error) =>
-            results.push(result)
+            results.push(error)
             @base.resetLastError()
             @base.error(error.message)
             @base.stack(error) if @debug
@@ -265,6 +273,7 @@ module.exports = (env) ->
     getVolume: -> Promise.resolve @config.volume
     getRepeat: -> Promise.resolve @config.repeat
     getLanguage: -> Promise.resolve @config.language
+    getTYpe: -> Promise.resolve @_options.type
     
     getCacheDir: -> @config.tmpDir
     isCacheEnabled: -> @config.enableCache

@@ -10,19 +10,13 @@ module.exports = (env) ->
     constructor: (@config, lastState, @_plugin) ->
       @id = @config.id
       @name = @config.name
+      
       @debug = @_plugin.config.debug || @config.debug || false
-      @base = commons.base @, "DLNAPlayerDevice"
+      @base = commons.base @, "MediaPlayerDevice"
+      
       @_detected = false
       @_pauseUpdates = false
       @_device = lastState?.device?.value or null
-      
-      @_playerEvents = {
-        loading: @_onPlayerEvent
-        playing: @_onPlayerEvent
-        paused: @_onPlayerEvent
-        stopped: @_onPlayerEvent
-        error: @_onPlayerEvent
-      }
       
       @addAttribute('type',{
         description: "Device type"
@@ -60,59 +54,67 @@ module.exports = (env) ->
       @_plugin.removeListener('discoveryEnd', @_onDiscoveryEnd)
       @_plugin.removeListener('discoveredMediaPlayer', @updateDevice)
       super()
-        
+    
     updateDevice: (device) =>
       return unless device.id is @id 
-      @_setDevice(device)
-      @_setPresence(true)
-      @_detected = true
-    
-    _setPresence: (presence) ->
-      return if presence is @_presence
-      super(presence)
-    
-    _setDevice: (device) ->
       @base.debug __("Updating network device information")
-      @_device = device unless @_pauseUpdates
-      @_type = device.getType()
-      @emit 'host', device.getHost()
+      @_detected = true
+
+      if !@_pauseUpdates
+        @_device = device
+        
+        @emit 'device', device
+        @emit 'host', device.getHost()
+        @emit 'type', device.getType()
       
-      @emit 'type', device.getType()
-      @emit('device', device)
+      @_setPresence(true)
     
     getDevice: () -> Promise.resolve(@_device)
-    getType: () -> Promise.resolve(@_type or 'N/A')
-    getHost: () -> Promise.resolve(@_host or '0.0.0.0')
+    getType: () -> Promise.resolve(@_device?.getType() or 'N/A')
+    getHost: () -> Promise.resolve(@_device?.getHost() or '0.0.0.0')
       
-    playAudio: (url) -> 
+    playAudio: (url) =>
       return new Promise( (resolve, reject) =>
         @base.debug __("Starting audio output")
-        
+        @base.debug __("url: %s", url)
         @_pauseUpdates = true
-        @_device.once( event, (data) => return handler(e, data) ) for event, handler of @_playerEvents
+        
+        @_device.on('loading', () =>
+          
+          @base.debug __("Network media player: loading")
+        )
+        
+        @_device.on('playing', () =>
+          @base.debug __("Network media player: playing")
+        )
+        
+        @_device.on('paused', () =>
+          @base.debug __("Network media player: paused")
+        )
+        
+        @_device.on('stopped', () =>
+          @base.debug __("Network media player: stopped")
+          @_pauseUpdates = false
+          resolve "stopped"
+        )
+        
+        @_device.on('error', (error) =>
+          @base.debug __("Network media player: error: %s", error.message)
+          @_pauseUpdates = false
+          @base.resetLastError()
+          return @base.rejectWithErrorString( Promise.reject, error, __("Media player error during playback of: %s", url) )
+        )
         
         play = @_device.play(url, 0)
-        env.logger.debug @_device
+        res = env.logger.debug @
       )
       .catch( (error) =>
+        @_pauseUpdates = false
         @base.resetLastError()
         @base.rejectWithErrorString Promise.reject, error
       )
       
     stopDlnaStreaming: () -> @_device.stop() if @_device? and @_presence
-    
-    _onPlayerEvent: (event, data) => 
-      @base.debug __("Network media player: %s", event)
-      if event is 'stopped'
-        @_pauseUpdates = false
-        return Promise.resolve event
-      
-      if event is 'error'
-        @_pauseUpdates = false
-        @base.resetLastError()
-        return @base.rejectWithErrorString( Promise.reject, error, __("Media player error during playback of: %s", url) )
-      
-      return @emit(event, data)
     
     _onDiscoveryEnd: () =>
       @_setPresence(false) if !@_detected

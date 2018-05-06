@@ -8,7 +8,7 @@ module.exports = (env) ->
   
   class MediaServer extends events.EventEmitter
 
-    constructor: (@_opts = {port: 0} ) ->
+    constructor: (@_opts = {port: 0}, @debug = false ) ->
       @_httpServer = null
       @_running = false
       
@@ -47,11 +47,12 @@ module.exports = (env) ->
         )
       
         @_httpServer.listen(@_opts.port, @_opts.address, () =>
-          env.logger.debug __("Media server started on: ip: %s, port: %s", @_httpServer.address().address, @_httpServer.address().port)
-          env.logger.debug __("Media server is serving media resource: %s", @_virtualResource)
-        
           @_running = true
-          resolve __("http://%s:%s%s", @_httpServer.address().address, @_httpServer.address().port, @_virtualResource)
+          ip = @_httpServer.address()
+          url = __("http://%s:%s%s", ip.address, ip.port, @_virtualResource)
+          
+          env.logger.debug __("Media server is serving media resource: %s", url)
+          resolve url
         )
         
       )

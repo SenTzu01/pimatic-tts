@@ -52,7 +52,7 @@
     "speaker": "^0.4.1",
     "wav": "^1.0.1",
     "castv2-client": "^1.2.0",
-    "upnp-device-client": "^1.0.2",
+    "upnp-device-client": "SenTzu01/node-upnp-device-client",
     "elementtree": "^0.1.7",
     "mediaserver": "^0.1.1"
   },
