@@ -23,9 +23,6 @@ module.exports = (env) ->
         .on('message', (message, rinfo) =>
           return if @_processed.indexOf(rinfo.address) != -1 or @_getStatusCode(message.toString()) != 200
           @_debug __("Received response from device: %s", rinfo.address)
-          @_debug __("Service announcement:")
-          @_debug(message.toString())
-
           
           @_parseResponse(message, rinfo)
         )
@@ -52,8 +49,7 @@ module.exports = (env) ->
       @_interval = setInterval( send, @_SEND_INTERVAL )
     
     _sendDatagram: (st) =>
-      @_debug __("Sending UDP datagram:")
-      @_debug @_mSearch.replace('$st', st)
+      @_debug __("Sending UDP datagram")
       
       message = new Buffer( @_mSearch.replace('$st', st), 'ascii' )
       @_socket.send(message, 0, message.length, @_SSDP_PORT, @_MULTICAST_ADDR)

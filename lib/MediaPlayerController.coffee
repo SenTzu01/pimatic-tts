@@ -34,7 +34,6 @@ module.exports = (env) ->
         return if @_MEDIA_EVENTS.indexOf(eventName) is -1
       
         if @_refs is 0
-          @_debug __("Registering listener for %s", eventName)
           @_receivedState = false
           @subscribe('AVTransport', @_onstatus)
         @_refs++
@@ -104,9 +103,7 @@ module.exports = (env) ->
         Direction: 'Input'
       }
       
-      env.logger.debug params
       @callAction('ConnectionManager', 'PrepareForConnection', params, (err, result) =>
-        env.logger.debug __("error code: %s", err.code) if err
         return callback(err) if err and err.code != 'ENOACTION'
         
         # If PrepareForConnection is not implemented, we keep the default (0) InstanceID
@@ -118,7 +115,6 @@ module.exports = (env) ->
           CurrentURIMetaData: @_buildMetadata(metadata)
         }
         
-        env.logger.debug params
         @callAction('AVTransport', 'SetAVTransportURI', params, (err) =>
           return callback(err) if err?
           
@@ -131,7 +127,6 @@ module.exports = (env) ->
       )
       
     play: (callback) =>
-      @_debug __("in play() method")
       params = {
         InstanceID: @_instanceId,
         Speed: 1
@@ -186,7 +181,6 @@ module.exports = (env) ->
       @emit('status', e)
       
       @_debug __("status:")
-      env.logger.debug e
       
       if !@_receivedState
         # Ignore first state (Full state)
@@ -194,8 +188,6 @@ module.exports = (env) ->
         return
       
       if e.hasOwnProperty('TransportState')
-        @_debug("emitting:")
-        @_debug(@_TRANSPORT_STATES[e.TransportState])
         @emit( @_TRANSPORT_STATES[e.TransportState] ) 
       @emit( 'speedChanged', Number(e.TransportPlaySpeed) ) if e.hasOwnProperty('TransportPlaySpeed')
     

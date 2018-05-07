@@ -70,7 +70,6 @@ module.exports = (env) ->
           type: type
           debug: @debug
         })
-        @_debug __("Media player object created: %s", device.id)
         @_devices.push device
         @emit('deviceFound', device)
       )
@@ -80,10 +79,8 @@ module.exports = (env) ->
     _createListener: (schema) ->
       listener = new SSDP(@port, @debug)
       listener.on('ssdpResponse', (headers, rinfo) =>
-        env.logger.debug headers
         if headers['LOCATION'] and headers['LOCATION'].indexOf('https://') < 0
           @_getXML(headers['LOCATION'], (xml) =>
-            env.logger.debug xml
             vendor = 'generic'
             vendor = 'google' if xml.search('<manufacturer>Google Inc.</manufacturer>') > -1
             @emit( __("%sDevice", vendor), headers, rinfo, xml)

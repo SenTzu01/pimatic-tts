@@ -76,7 +76,6 @@ module.exports = (env) ->
     playAudio: (url) =>
       return new Promise( (resolve, reject) =>
         @base.debug __("Starting audio output")
-        @base.debug __("url: %s", url)
         @_pauseUpdates = true
         
         @_device.on('loading', () =>
@@ -106,7 +105,7 @@ module.exports = (env) ->
         )
         
         play = @_device.play(url, 0)
-        res = env.logger.debug @
+        #res = env.logger.debug @
       )
       .catch( (error) =>
         @_pauseUpdates = false
