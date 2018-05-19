@@ -43,7 +43,7 @@ module.exports = (env) ->
           TTSProvider = TTSProviders[obj]
           
           @base.debug "Registering device class #{TTSProvider.device}"
-          deviceConfig = require("./devices/" + TTSProvider.deviceDef)
+          deviceConfig = require("./" + TTSProvider.deviceDef)
           
           if TTSProvider.langResource?
             languages = require('./resources/'+ TTSProvider.langResource)
@@ -75,7 +75,7 @@ module.exports = (env) ->
           className = "#{OutputProvider.device}MediaPlayerDevice"
           @base.debug __("Registering device class: %s", className)
           
-          deviceConfig = require("./devices/" + OutputProvider.deviceDef)
+          deviceConfig = require("./" + OutputProvider.deviceDef)
           deviceClass = require('./devices/' + className)(env)
           
           params = {
