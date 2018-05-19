@@ -9,7 +9,7 @@ module.exports = (env) ->
     _SEND_INTERVAL: 5*1000
     _SSDP_HEADER: /^([^:]+):\s*(.*)$/
     
-    constructor: (port = 0, @debug = false) ->
+    constructor: (address, port = 0, @debug = false) ->
       
       @_mSearch  = 'M-SEARCH * HTTP/1.1\r\n'
       @_mSearch += __("HOST: %s:%s\r\n", @_MULTICAST_ADDR, @_SSDP_PORT)
@@ -34,14 +34,14 @@ module.exports = (env) ->
           @_debug __("Listening on %s:%s for ssdp announcements", ip.address, ip.port)
         )
         
-        .bind(port)
+        .bind(port, address)
     
     destroy: () ->
       @_socket.close()
       @_socket = null
       return if !@_interval
       clearInterval(@_interval)
-    
+      
     search: (st) =>
       send = => @_sendDatagram(st)
       
@@ -49,7 +49,7 @@ module.exports = (env) ->
       @_interval = setInterval( send, @_SEND_INTERVAL )
     
     _sendDatagram: (st) =>
-      @_debug __("Sending UDP datagram")
+      #@_debug __("Sending UDP datagram")
       
       message = new Buffer( @_mSearch.replace('$st', st), 'ascii' )
       @_socket.send(message, 0, message.length, @_SSDP_PORT, @_MULTICAST_ADDR)

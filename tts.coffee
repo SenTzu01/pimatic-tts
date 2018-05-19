@@ -3,34 +3,40 @@ module.exports = (env) ->
   _ = env.require 'lodash'
   Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
-  MediaPlayerDiscovery = require('./lib/MediaPlayerDiscovery')(env)
   os = require('os')
   
   TTSProviders =
     'Google':
       device: 'GoogleTTSDevice'
-      deviceDef: 'google-device-config-schema'
+      deviceDef: 'tts-device-config-schemas'
       langResource: 'google-tts-api-lang.json'
     'Pico':
       device: 'PicoTTSDevice'
-      deviceDef: 'pico-device-config-schema'
+      deviceDef: 'tts-device-config-schemas'
       langResource: 'pico-tts-api-lang.json'
       
   OutputProviders =
-    'MediaPlayer':
-      device: 'MediaPlayerDevice'
-      deviceDef: 'mediaplayer-device-config-schema'
-      
+    'generic':
+      device: 'UPnP'
+      deviceDef: 'mediaplayer-device-config-schemas'
+    'chromecast':
+      device: 'Chromecast'
+      deviceDef: 'mediaplayer-device-config-schemas'
+  
   class TextToSpeechPlugin extends env.plugins.Plugin
     
     init: (app, @framework, @config) =>
       @debug = @config.debug || false
       @base = commons.base @, 'Plugin'
       
-      @_listener = null
       @_inetAddresses = []
       
       @_configureMediaServerAddress()
+      
+      listeners = []
+      discoveryInterval = @_toMilliSeconds( @config.discoveryInterval ? 30 )
+      discoveryDuration = @_toMilliSeconds( @config.discoveryTimeout ? 10 )
+      discoveryInterval = discoveryDuration*2 unless discoveryInterval > discoveryDuration*2
       
       for own obj of TTSProviders
         do (obj) =>
@@ -61,55 +67,43 @@ module.exports = (env) ->
         do (obj) =>
           OutputProvider = OutputProviders[obj]
           
-          @base.debug "Registering device class #{OutputProvider.device}"
+          @base.debug "Starting discovery of #{OutputProvider.device} media player devices"
+          Discovery = require("./lib/" + OutputProvider.device + "Discovery")(env)
+          listener = new Discovery(discoveryInterval, discoveryDuration, @config.address, null, @debug)
+          listeners.push listener
+          
+          className = "#{OutputProvider.device}MediaPlayerDevice"
+          @base.debug __("Registering device class: %s", className)
+          
           deviceConfig = require("./devices/" + OutputProvider.deviceDef)
-          deviceClass = require('./devices/' + OutputProvider.device)(env)
+          deviceClass = require('./devices/' + className)(env)
           
           params = {
-            configDef: deviceConfig[OutputProvider.device], 
-            createCallback: (config, lastState) => return new deviceClass(config, lastState, @)
+            configDef: deviceConfig[className], 
+            createCallback: (config, lastState) => return new deviceClass(config, lastState, listener, @debug)
           }
-          @framework.deviceManager.registerDeviceClass(OutputProvider.device, params)
+          @framework.deviceManager.registerDeviceClass(className, params)
+          
+          listener.on('deviceDiscovered', (cfg) =>
+            if @config.enableDiscovery and @_isNewDevice(cfg.id)
+              newDevice = @_createPimaticDevice(cfg)
+              newDevice.updateDevice(cfg)
+          )
+          listener.start()
       
       @base.debug "Registering action provider"
       actionProviderClass = require('./actions/TTSActionProvider')(env)
       @framework.ruleManager.addActionProvider(new actionProviderClass(@framework, @config))
-
-      @_discoverMediaPlayers() if @config.enableDiscovery
-      
-    _discoverMediaPlayers: () =>
-      port = 0
-      discoveryInterval = @_toMilliSeconds( @config.discoveryInterval ? 30 )
-      discoveryDuration = @_toMilliSeconds( @config.discoveryTimeout ? 10 )
-      discoveryInterval = discoveryDuration*2 unless discoveryInterval > discoveryDuration*2
-      
-      @_listener = new MediaPlayerDiscovery(discoveryInterval, discoveryDuration, @port, @debug)
-        .on('deviceDiscovered', (mplayer) =>
-          @emit('discoveredMediaPlayer', mplayer)
-          @_createPimaticDevice(mplayer) if @_isNewDevice(mplayer.id)
-        
-        )
-        .on('discoveryStopped', =>
-          @emit 'discoveryEnd', true
-        
-        )
-        .start()
     
-    _createPimaticDevice: (mplayer) =>
-      return if !mplayer?.id? or !mplayer?.name?
-      @base.debug __("Creating new network media player device: %s", mplayer.name)
+    _createPimaticDevice: (cfg) =>
+      return if !cfg? or !cfg.id? or !cfg.name?
+      @base.debug __("Creating new network media player device: %s with IP: %s", cfg.name, cfg.address)
       
-      cfg = {
-        id: mplayer.id
-        name: mplayer.name
-        class: OutputProviders.MediaPlayer.device
-      }
-      device = @framework.deviceManager.addDeviceByConfig(cfg)
-      
-      if device?
-        device.updateDevice(mplayer)
-      else
-        @base.error __("Error creating new network media player device '%s'", device.id)
+      return @framework.deviceManager.addDeviceByConfig({
+        id: cfg.id,
+        name: cfg.name
+        class: OutputProviders[cfg.type].device
+      })
     
     _isNewDevice: (id) -> 
       return !@framework.deviceManager.isDeviceInConfig(id)
@@ -156,7 +150,7 @@ module.exports = (env) ->
       return ip
       
     destroy: () ->
-      #@_dlnaBrowser.stop() if @_dlnaBrowser?
+      super()
       
   TTSPlugin = new TextToSpeechPlugin
   return TTSPlugin

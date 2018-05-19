@@ -72,7 +72,7 @@ module.exports = (env) ->
     
     constructor: () ->
       @base = commons.base @, @config.class
-      @debug = @pluginConfig.debug
+      @debug = @pluginConfig.debug ? @config.debug ? false
       
       @_options = {}
       @_options.volume = { setting: @config.volume, max: 150, min: 1, maxRel: 100 }
@@ -94,14 +94,13 @@ module.exports = (env) ->
         outputDevice.getType().then( (type) =>
           if type != @_options.type
         
-            outputDevice.getPresence().then( (presence) =>
-              return @base.rejectWithErrorString Promise.reject, new Error( __("Network media player %s was not detected. Unable to ouput speech.", outputDevice.id) ) if !presence
+            outputDevice.getState().then( (state) =>
+              return @base.rejectWithErrorString Promise.reject, new Error( __("Network media player %s was not detected. Unable to ouput speech.", outputDevice.id) ) if !state
               
               @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress}, @debug)
               @_mediaServer.create(resource)
             )
             .then( (url) =>
-              @_setResource(url)
               return @_outputSpeech(outputDevice, url)
             )
             .catch( (error) =>
@@ -112,7 +111,6 @@ module.exports = (env) ->
             )
       
           else
-            @_setResource(resource)
             @_outputSpeech(outputDevice, resource)
             .then( (result) =>
               return Promise.resolve result
@@ -130,10 +128,13 @@ module.exports = (env) ->
     _outputSpeech: (device, resource) =>
       return @base.rejectWithErrorString Promise.reject, new Error( __("Unable to output Speech: device is null") ) if !device?
       return @base.rejectWithErrorString Promise.reject, new Error( __("Unable to output Speech: resource is null") ) if !resource?
+      
       return new Promise( (resolve, reject) =>
         i = 1
         interval = @getSessionInterval()
         results = []
+        
+        @_setResource(resource)
         
         outputWithDelayedRepeat = () =>
           @base.debug __("%s: Starting audio output for iteration: %s", @id, i)

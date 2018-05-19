@@ -2,6 +2,7 @@ module.exports = (env) ->
 
   DeviceClient = require('upnp-device-client')
   et = require('elementtree')
+  util = require('util')
   
   # The MediaPlayerController Object exposes methods to remotely control a Media player
   # It also emits events on Media player status changes
@@ -104,10 +105,12 @@ module.exports = (env) ->
       }
       
       @callAction('ConnectionManager', 'PrepareForConnection', params, (err, result) =>
-        return callback(err) if err and err.code != 'ENOACTION'
+        return callback(err) if err? and err.code != 'ENOACTION'
+        #console.log result
+        #@_debug(result)
         
         # If PrepareForConnection is not implemented, we keep the default (0) InstanceID
-        @_instanceId = result.AVTransportID
+        @_instanceId = result.AVTransportID if result?.AVTransportID?
         
         params = {
           InstanceID: @_instanceId,
@@ -180,7 +183,7 @@ module.exports = (env) ->
     _onstatus: (e) =>
       @emit('status', e)
       
-      @_debug __("status:")
+      @_debug __("Status received: %s", util.inspect(e, {showHidden: true, depth: null }))
       
       if !@_receivedState
         # Ignore first state (Full state)
@@ -188,7 +191,8 @@ module.exports = (env) ->
         return
       
       if e.hasOwnProperty('TransportState')
-        @emit( @_TRANSPORT_STATES[e.TransportState] ) 
+        @_debug( __("Emitting event: %s", @_TRANSPORT_STATES[e.TransportState]) )
+        @emit( @_TRANSPORT_STATES[e.TransportState] )
       @emit( 'speedChanged', Number(e.TransportPlaySpeed) ) if e.hasOwnProperty('TransportPlaySpeed')
     
     _formatTime: (seconds) ->
@@ -261,6 +265,10 @@ module.exports = (env) ->
         return xml
     
     _noOp: () -> return undefined
-    _debug: (msg) -> env.logger.debug __("[MediaPlayerController] %s", msg) if @debug
+    
+    _debug: (msg) =>
+      if typeof msg is 'object'
+        msg = util.inspect( msg, {showHidden: true, depth: null } )
+      env.logger.debug __("[MediaPlayerController] %s", msg) if @debug
     
   return MediaPlayerController

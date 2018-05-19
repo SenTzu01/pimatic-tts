@@ -24,7 +24,38 @@ module.exports = (env) ->
         @_virtualResource = path.join( @_virtualDirMedia, path.basename(resource) )
         
         @_httpServer = http.createServer() if !@_httpServer?
-        @_httpServer.on('request', @_requestListener)
+        
+        @_httpServer.on('request', (request, response) =>
+          if request?
+            env.logger.debug __("New request from %s: method: %s, URL: %s", request.socket.remoteAddress, request.method, request.url)
+          
+            response.on('close', () =>
+              msg = _("Server prematurely closed the connection")
+              env.logger.error msg
+              @emit('responseClose', new Error(msg) ) 
+            )
+            response.on('finish', () => 
+              env.logger.debug __("Server responded to request")
+              @emit('responseComplete', response) 
+            )
+            request.on('aborted', () =>
+              msg = __("Client prematurely aborted the request")
+              env.logger.error msg
+              @emit('requestAborted', new Error(msg) ) 
+            )
+            request.on('close', () => 
+              env.logger.debug __("Client closed connection") 
+              @emit('requestComplete', request.url)
+            )
+        
+            if !@_validRequest(request)
+              @_httpResponse404(response)
+              env.logger.debug __("resource not found: %s", request.url)
+              return
+        
+          env.logger.debug "piping request to media streamer"
+          StreamServer.pipe(request, response, @_physicalResource)
+        )
       
         @_httpServer.on('error', (error) =>
           reject error
@@ -54,40 +85,7 @@ module.exports = (env) ->
           env.logger.debug __("Media server is serving media resource: %s", url)
           resolve url
         )
-        
       )
-    
-    _requestListener: (request, response) =>
-      
-      if request?
-        env.logger.debug __("New request from %s: method: %s, URL: %s", request.socket.remoteAddress, request.method, request.url)
-        
-        response.on('close', () =>
-          msg = _("Server prematurely closed the connection")
-          env.logger.error msg
-          @emit('responseClose', new Error(msg) ) 
-        )
-        response.on('finish', () => 
-          env.logger.debug __("Server responded to request")
-          @emit('responseComplete', response) 
-        )
-        request.on('aborted', () =>
-          msg = __("Client prematurely aborted the request")
-          env.logger.error msg
-          @emit('requestAborted', new Error(msg) ) 
-        )
-        request.on('close', () => 
-          env.logger.debug __("Client closed connection") 
-          @emit('requestComplete', request.url)
-        )
-      
-        if !@_validRequest(request)
-          @_httpResponse404(response)
-          env.logger.debug __("resource not found: %s", request.url)
-          return
-        
-      env.logger.debug "piping request to media streamer"
-      StreamServer.pipe(request, response, @_physicalResource)
     
     _validRequest: (request) ->
       return @_virtualResource is request?.url
