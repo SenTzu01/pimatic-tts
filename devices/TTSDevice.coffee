@@ -8,7 +8,6 @@ module.exports = (env) ->
   Crypto = require('crypto')
   Volume = require('pcm-volume')
   Speaker = require('speaker')
-  MediaServer = require('../lib/MediaServer')(env)
   path = require('path')
   mp3Duration = require('mp3-duration')
   
@@ -108,19 +107,12 @@ module.exports = (env) ->
         (resource, type, state) =>
           return Promise.reject new Error( __("Network media player %s was not detected. Unable to ouput speech.", outputDevice.id) ) unless state
           
-          if type is 'localAudio'
-            return @_outputAudio(outputDevice, resource, @getSessionVolume(), @getSessionRepeat(), @getSessionInterval()) 
-          
-          resource = 'imperial_march.mp3'
-          @_startMediaServer(resource)
-          .then( (url) =>
-            return @_outputAudio(outputDevice, url, @getSessionVolume(), @getSessionRepeat(), @getSessionInterval())
+          @_outputAudio(outputDevice, resource, @getSessionVolume(), @getSessionRepeat(), @getSessionInterval())
+          .then( (result) =>
+            return Promise.resolve result
           )
           .catch( (error) =>
             return Promise.reject error
-          )
-          .finally( () =>
-            @_stopMediaServer()
           )
       )
       .catch( (error) =>
