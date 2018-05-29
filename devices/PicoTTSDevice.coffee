@@ -5,7 +5,6 @@ module.exports = (env) ->
   TTSDevice = require("./TTSDevice")(env)
   spawn = require('child_process').spawn
   fs = require('fs')
-  wav = require('wav')
   
   class PicoTTSDevice extends TTSDevice
     
@@ -19,8 +18,6 @@ module.exports = (env) ->
       super()
       
     _setup: ->
-      @_setAudioDecoder(wav.Reader)
-      @_setAudioFormat('wav')
       @_setExecutable(@config.executable ? '/usr/bin/pico2wav')
       @_setArguments((file, text) => return [ '-l', @_options.language, '-w', file, text])
     
@@ -53,6 +50,7 @@ module.exports = (env) ->
     
     getExecutable: -> @_options.executable
     getArguments: -> @_options.arguments
+    getAudioFormat: () -> return 'wav'
     
     _setExecutable: (value) ->
       if value is @_options.executable then return

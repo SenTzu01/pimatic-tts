@@ -6,9 +6,9 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   googleAPI = require('google-tts-api')
   request = require('request')
-  lame = require('lame')
   fs = require('fs')
   TTSDevice = require("./TTSDevice")(env)
+  lame = require('lame')
   
   class GoogleTTSDevice extends TTSDevice
     
@@ -19,6 +19,8 @@ module.exports = (env) ->
       @maxStringLenghtGoogle = 200
       @actions = _.cloneDeep @actions
       @attributes = _.cloneDeep @attributes
+      
+      @_options = {}
       
       @addAction('getSpeed', {
         description: "Returns the Voice speed"
@@ -36,35 +38,39 @@ module.exports = (env) ->
       super()
     
     _setup: ->
-      @_setAudioFormat('mp3')
-      @_setAudioDecoder( lame.Decoder )
       @_setSpeed(@config.speed)
       @_setMaxStringLength(@maxStringLenghtGoogle)
       
     getSpeed: -> @_options.speed
     getSpeedPercentage: -> @getSpeed() / 100
     getMaxStringLength: -> @_options.maxStringLength
+    getAudioFormat: () -> return 'mp3'
     
-    generateResource: (file, text) =>
+    _synthesizeSpeech: (file, text) =>
       
       return new Promise( (resolve, reject) =>
-        @base.rejectWithErrorString Promise.reject, new Error( __("%s: A maximum of 200 characters is allowed.", @id, text.length) ) unless text.length < @getMaxStringLength()
+        return reject new Error( __("%s: A maximum of 200 characters is allowed.", @id, text.length) ) unless text.length < @getMaxStringLength()
         
-        @getLanguage().then( (language) =>
+        @getLanguage()
+        .then( (language) =>
           @base.debug __("@_options.language: %s", language)
           @base.debug __("speed: %s. Calculated speed: %s", @getSpeed(), @getSpeedPercentage() )
           
-          googleAPI( text, language, @getSpeedPercentage() ).then( (resource) =>
-            @base.debug __("resource: %s", resource)
-            
-            readStream = request.get(resource)
-              .on('error', (error) =>
-                @base.rejectWithErrorString Promise.reject, error, __("Failure reading audio resource '%s'.", resource)
-              )
-            @_writeResource(readStream, file).then( (file) =>
-              resolve file
-            )
+          googleAPI( text, language, @getSpeedPercentage() )
+        )
+        .then( (resource) =>
+          @base.debug __("resource: %s", resource)
+          
+          readStream = request.get(resource)
+          readStream.on('error', (error) =>
+            return reject error
           )
+          
+          @_createFileFromStream(readStream, file)
+        )
+        .then( (file) => #readStream
+            
+            resolve file
         )
       )
     

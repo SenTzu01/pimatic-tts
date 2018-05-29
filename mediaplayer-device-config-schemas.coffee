@@ -20,4 +20,14 @@ module.exports = {
         default: false
         required: false
   }
+  LocalAudioMediaPlayerDevice: {
+    title: "Local Audio media player device config options"
+    type: "object"
+    properties:
+      debug:
+        description: "Debug this device."
+        type: "boolean"
+        default: false
+        required: false
+  }
 }

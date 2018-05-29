@@ -10,77 +10,80 @@ module.exports = (env) ->
   class UPnPMediaPlayerDevice extends MediaPlayerDevice
     
     constructor: (@config, lastState, @_listener, @debug = false) ->
-      @base = commons.base @, "UPnPMediaPlayerDevice"
       @id = @config.id
       @name = @config.name
       
       @_controller = null
+      #@on('xml', (xml) => @_controller = @_newController(xml, @debug) )
       
       super(lastState)
       
     destroy: -> super()
     
-    playAudio: (url, timestamp = 0) =>
+    playAudio: (url, outputDuration, volume = 40) =>
       return new Promise( (resolve, reject) =>
-        @_pauseUpdates = true
-        
+        @_disableUpdates()
         opts = {
-          autoplay: true,
           contentType: 'audio/mp3'
+          duration: outputDuration
         }
         
-        controller = @_getController()
-        controller.on('stopped', () =>    return @_onStopped() )
-        controller.on('error', (error) => return @_onError(error) )
+        @_controller = @_newController(@_xml) if !@_controller?
+        @_controller
+          .once('stopped', ()     => resolve @_onStopped() )
+          .once('error', (error)  => reject @_errorHandler(error) )
+          .load(url, opts, (error, result) =>
+            if error?
+              @_debug __("error - code: %s, message: %s", error.code, error.message)
+            reject error if error?
           
-        controller.load(url, opts, (error) =>
-          return @_onError(error) if error?
-          
-          controller.seek(timestamp)
-        )
+            @_debug result
+            @_controller.play( (error, result) =>
+              reject error if error?
+              
+              @_debug result
+              @_controller.getMediaInfo( (error, result) =>
+                reject error if error?
+                
+                @_debug result
+                @_controller.getTransportInfo( (error, result) =>
+                  reject error if error?
+                  
+                  @_debug result
+                )
+              )
+            )
+          )
       )
       .catch( (error) =>
-        @_pauseUpdates = false
-        @base.resetLastError()
-        @base.rejectWithErrorString Promise.reject, error
+        Promise.reject @_errorHandler(error)
       )
     
     stop: () =>
       @_controller.stop() if @_controller?
-      @_controller = null
-    
-    _getController: () =>
-      
-      @_controller = new MediaPlayerController(@_xml, @debug)
-        .on("loading", () => 
-          @base.debug __("Network media player: loading")
-        )
-      
-        .on("playing", () =>
-          @base.debug __("Network media player: playing")
-        )
-        
-        .on("paused", () =>
-          @base.debug __("Network media player: paused")
-        )
-      return @_controller
-    
-    _onError: (error) =>
-      @base.debug __("Network media player: error: %s", error.message)
-      
-      @stop()
-      @_pauseUpdates = false
-      @base.resetLastError()
-      @emit('error', err)
-      
-      return @base.rejectWithErrorString( Promise.reject, error, __("Media player error during playback") )
     
     _onStopped: () =>
-      @base.debug __("Network media player: stopped")
+      @_logStatus( "stopped" )
+      @_enableUpdates()
+      return "success"
+    
+    _errorHandler: (error) =>
+      @base.resetLastError()
+      @_logStatus( __("error - ", error.message) )
+      @_enableUpdates()
+      return error
+    
+    _getController: (xml) =>
+      controller = new MediaPlayerController(xml, @debug)
+        .on("loading", () => @_logStatus( "loading" ) )
+        .on("playing", () => @_logStatus( "playing" ) )
+        .on("paused", ()  => @_logStatus( "paused" ) )
+      return controller
+    
+    _newController: (xml) =>
+      @_controller = null
+      return @_getController(xml)
       
-      @_pauseUpdates = false
-      @emit('stopped')
-      
-      return Promise.resolve true
+    _logStatus: (status) => @_debug( __("Network media player: %s", status) )
     
   return UPnPMediaPlayerDevice

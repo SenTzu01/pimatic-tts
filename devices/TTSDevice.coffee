@@ -10,9 +10,12 @@ module.exports = (env) ->
   Speaker = require('speaker')
   MediaServer = require('../lib/MediaServer')(env)
   path = require('path')
+  mp3Duration = require('mp3-duration')
   
   
   class TTSDevice extends env.devices.Device
+    _FILE_PREFIX: '/pimatic-tts_'
+    
     attributes:
       language:
         description: "Voice synthesis language"
@@ -61,150 +64,161 @@ module.exports = (env) ->
         params:
           text:
             type: t.object
-      playAudio:
-        description: "Outputs Audio to the configured device"
-        params:
-          resource:
-            type: t.string
       
-    generateResource: () -> throw new Error "Function \"generateResource\" is not implemented!"
-    _setup: () -> throw new Error "Function \"_setup\" is not implemented!"
+    generateResource: ()  -> @_errMethodNotImplemented('generateResource')
+    getAudioFormat: ()    -> @_errMethodNotImplemented('getAudioFormat')
+    _setup: ()            -> @_errMethodNotImplemented('_setup')
     
     constructor: () ->
       @base = commons.base @, @config.class
       @debug = @pluginConfig.debug ? @config.debug ? false
       
-      @_options = {}
-      @_options.volume = { setting: @config.volume, max: 150, min: 1, maxRel: 100 }
-      @_options.type = 'localAudio'
-      
-      @_mediaServer = null
-      @_mediaServerAddress = @pluginConfig.address
+      @_mediaServer         = null
+      @_mediaServerAddress  = @pluginConfig.address
       
       @_setup()
       super()
-      
-    textToSpeech: (ttsSettings) =>
-      @_setConversionSettings(ttsSettings)
-      return @base.rejectWithErrorString Promise.reject, new Error( __("%s - TTS text provided is null or undefined.", @config.id) ) unless @getText()?
-      
-      @_createResource( @getText() ).then( (resource) =>
-        @base.debug __(" Going to speak '%s', Repeating: %s times, every %s seconds", resource, @getSessionRepeat(), @getSessionInterval())
-        outputDevice = @getOutputDevice()
-        outputDevice.getType().then( (type) =>
-          if type != @_options.type
-        
-            outputDevice.getState().then( (state) =>
-              return @base.rejectWithErrorString Promise.reject, new Error( __("Network media player %s was not detected. Unable to ouput speech.", outputDevice.id) ) if !state
-              
-              @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress}, @debug)
-              @_mediaServer.create(resource)
-            )
-            .then( (url) =>
-              return @_outputSpeech(outputDevice, url)
-            )
-            .catch( (error) =>
-              return Promise.reject error
-            )
-            .finally( () =>
-              @_mediaServer.stop() if @_mediaServer?
-            )
-      
-          else
-            @_outputSpeech(outputDevice, resource)
-            .then( (result) =>
-              return Promise.resolve result
-            )
-            .catch( (error) =>
-              return Promise.reject error
-            )
-        )
-      ).catch( (error) =>
-        @base.resetLastError()
-        @base.stack(error)
-        return Promise.reject error
-      )
     
-    _outputSpeech: (device, resource) =>
-      return @base.rejectWithErrorString Promise.reject, new Error( __("Unable to output Speech: device is null") ) if !device?
-      return @base.rejectWithErrorString Promise.reject, new Error( __("Unable to output Speech: resource is null") ) if !resource?
+    getInterval: -> Promise.resolve @config.interval
+    getVolume: -> Promise.resolve @config.volume
+    getRepeat: -> Promise.resolve @config.repeat
+    getLanguage: -> Promise.resolve @config.language
+    
+    getCacheDir: -> @config.tmpDir
+    isCacheEnabled: -> @config.enableCache
+    getSessionVolume: -> @_conversionSettings?.speech?.volume?.parsed ? @config.volume
+    getSessionRepeat: -> @_conversionSettings?.speech?.repeat?.number?.parsed ? @config.repeat
+    getSessionInterval: -> @_toMilliSeconds( @_conversionSettings?.speech?.repeat?.interval?.parsed ? @config.interval )
+    getText: -> @_conversionSettings.text.parsed
+    isStatic: -> @_conversionSettings.text.static
+    getCache: -> @_conversionSettings.output.cache
+    getOutputDevice: -> @_conversionSettings.output.device
+    
+    textToSpeech: (ttsSettings) =>
+      return Promise.reject new Error( __("%s - TTS text provided is null or undefined.", @id) ) unless ttsSettings?.text?.parsed?
       
-      return new Promise( (resolve, reject) =>
-        i = 1
-        interval = @getSessionInterval()
-        results = []
-        
-        @_setResource(resource)
-        
-        outputWithDelayedRepeat = () =>
-          @base.debug __("%s: Starting audio output for iteration: %s", @id, i)
+      @_setConversionSettings(ttsSettings)
+      
+      outputDevice  = @getOutputDevice()
+      
+      Promise.join(
+        @_createSpeechResource( @getText() ),
+        outputDevice.getType(),
+        outputDevice.getState(),
+        (resource, type, state) =>
+          return Promise.reject new Error( __("Network media player %s was not detected. Unable to ouput speech.", outputDevice.id) ) unless state
           
-          device.playAudio(resource).then( (result) =>
-            @base.debug __("%s: Finished audio output for iteration: %s", @id, i)
-            
-            i++
-            results.push(result)
-            interval = 1 if i >= @getSessionRepeat()
+          if type is 'localAudio'
+            return @_outputAudio(outputDevice, resource, @getSessionVolume(), @getSessionRepeat(), @getSessionInterval()) 
+          
+          resource = 'imperial_march.mp3'
+          @_startMediaServer(resource)
+          .then( (url) =>
+            return @_outputAudio(outputDevice, url, @getSessionVolume(), @getSessionRepeat(), @getSessionInterval())
           )
-          .delay( interval*1000 )
           .catch( (error) =>
-            results.push(error)
-            @base.resetLastError()
-            @base.error(error.message)
-            @base.stack(error) if @debug
+            return Promise.reject error
           )
           .finally( () =>
-            if i <= @getSessionRepeat()
-              repeater = outputWithDelayedRepeat()
-            else
-              return Promise.all( results )
+            @_stopMediaServer()
           )
-       
-        outputWithDelayedRepeat().then( (result) =>
-          resolve( __("'%s' was spoken %s times", @getText(), @getSessionRepeat()) ) if result?
-        )
-        .catch(Promise.AggregateError, (errors) =>
-          return base.rejectWithErrorString( Promise.reject, new Error( __("'%s' was only spoken %s out of %s times.", getText(), ( @getSessionRepeat - errors.length ), @getSessionRepeat() ) ) )
-        )
-        .finally( () =>
-          if !@isStatic() or !@isCacheEnabled()
-            @base.debug __("%s: Static text: %s, Cache enabled: %s. Removing cached file: '%s'", @id, @isStatic(), @isCacheEnabled(), @getCache())
-            @_removeCache()
-        )
+      )
+      .catch( (error) =>
+        @base.resetLastError()
+        @base.error __("There were error(s) outputting text to speech")
+        @base.stack(error) if @debug
+        
+        return Promise.reject error
       )
       
-    _createResource: (text, attempt = 1) =>
-      @base.debug __("%s: Getting TTS Resource for text: '%s', language: '%s'", @id, text, @config.language)
+    _outputAudio: (device, resource, volume, iterations = 1, interval =0) =>
+      text = @getText()
+      
+      mp3Duration(@getCache())
+      .then( (duration) =>
+        @_repeatOutput(device, resource, duration, volume, iterations, interval)
+      )
+      .then( (result) =>
+        return Promise.resolve( __("'%s' was spoken %s times", text, iterations) )
+      )
+      .catch(Promise.AggregateError, (errors) =>
+        return Promise.reject( new Error( __("'%s' was only spoken %s out of %s times.", text, ( iterations - errors.length ), iterations ) ) )
+      )
+      .catch( (error) =>
+        return Promise.reject( error )
+      )
+      .finally( () =>
+        if !@isStatic() or !@isCacheEnabled()
+          @base.debug __("Static text: %s, Cache enabled: %s. Removing cached file: '%s'", @isStatic(), @isCacheEnabled(), @getCache())
+          @_removeCache()
+      )
+    
+    _repeatOutput: (device, resource, duration, volume, iterations, interval, i = 0, results = []) =>
+      @base.debug __("Starting audio output for iteration: %s", i+1)
+      
+      done      = () => return ( iterations <= i )
+      wait  = () => if done() then return @_toMilliSeconds(1) else return interval
+      addResult = (result) -> results.push(result)
+      
+      device.playAudio(resource, duration, volume)
+      .then( (result) => 
+        addResult(result)
+      )
+      .catch( (error) =>
+        @base.resetLastError()
+        @base.error(error)
+        @base.stack(error)
+        addResult(error)
+       )
+      
+      .delay( wait() )
+      
+      .finally( () =>
+        i++
+        return Promise.all(results) if done()
+        
+        repeater = @_outputWithDelayedRepeat(device, resource, duration, volume, iterations, interval, i, results)
+      )
+    
+    _startMediaServer: (resource) =>
+      @_mediaServer = new MediaServer({ port:0, address: @_mediaServerAddress}, @debug)
+      @_mediaServer.create(resource)
+    
+    _stopMediaServer: () =>
+      @_mediaServer.stop() if @_mediaServer?
+    
+    _createSpeechResource: (text, attempt = 1) =>
+      @base.debug __("%s: Getting TTS Resource.", @id)
       
       return new Promise( (resolve, reject) =>
-        fname = path.join(@getCacheDir(), @_getHashedFilename(text))
+        fname = path.join(@getCacheDir(), @_createFilename(text))
         
         fs.open(fname, 'r', (error, fd) =>
-          if error
+          if error?
             if error.code is "ENOENT"
-              env.logger.info("%s: Generating speech resource for '%s'", @id, text)
+              env.logger.info("%s: Generating speech resource", @id)
               
-              return @generateResource(fname, text).then( (cacheFile) => 
-                @_setCache(cacheFile)
-                resolve cacheFile
+              return @_synthesizeSpeech(fname, text).then( (file) => 
+                @_setCache(file)
+                resolve file
               )
               
             else
               if attempt < 4
-                if attempt is 1
-                  env.logger.warning __("%s: Cached resource cannot be accessed. Attempting to remove and re-create.", @id)
-                else
-                  env.logger.warning __("%s: Removal attempt %s...", @id, attempt)
+                env.logger.warning __("%s: Cached resource cannot be accessed. Attempting to remove and re-create.", @id)
                 
                 attempt++
-                @_removeCache().then( (resolve, reject) => @_createResource(text, attempt) )
+                @_removeCache()
+                .finally( () => 
+                  @_createSpeechResource(text, attempt)
+                )
                 
               else
-                @base.rejectWithErrorString Promise.reject, new Error( __("Unable to remove file.") ), __("%s: Giving up.", @id)
+                reject new Error( __("%s: Unable to remove file. Giving up.", @id) )
           
           else
             fs.close(fd, () =>
-              env.logger.info __("%s: Using cached speech resource for '%s'.", @id, text)
+              env.logger.info __("%s: Using cached speech resource.", @id)
               
               @_setCache(fname)
               resolve fname
@@ -212,7 +226,7 @@ module.exports = (env) ->
         )
       )
     
-    _writeResource: ( readStream, file ) =>
+    _createFileFromStream: ( readStream, file ) =>
       return new Promise( (resolve, reject) =>
         fsWrite = fs.createWriteStream(file)
           .on('finish', () =>
@@ -225,120 +239,18 @@ module.exports = (env) ->
           )
           .on('error', (error) =>
             @base.resetLastError()
-            return @base.rejectWithErrorString Promise.reject, error, __("Error generating speech resource")
+            
             @_removeCache()
+            .then( () =>
+              reject error
+            )
             .catch( (error) =>
-              @base.resetLastError()
-              @base.error __("Error removing cache file: %s", error.message)
+              reject error
             )
           )
         readStream.pipe(fsWrite)
       )
     
-    playAudio: (resource) => @_localAudio(resource)
-    _localAudio: (resource) =>
-      return new Promise( (resolve, reject) =>
-        
-        audioDecoder = @getAudioDecoder()
-        audioDecoder.on('format', (pcmFormat) =>
-          @base.debug pcmFormat
-          
-          speaker = new Speaker(pcmFormat)
-            .on('open', () =>
-              @base.debug __("%s: Audio output started.", @id)
-            )
-        
-            .on('error', (error) =>
-              @base.resetLastError()
-              @base.rejectWithErrorString Promise.reject, error, __("%s: Audio output of '%s' failed. Error: %s", @id, @getText(), error)
-            )
-        
-            .on('finish', () =>
-              msg = __("%s: Audio output completed successfully.", @id)
-              @base.debug msg
-              resolve msg
-            )
-            
-          
-          @base.debug __("@_conversionSettings.speech.volume: %s", @getSessionVolume())
-          @_volControl = new Volume( @_pcmVolume( @getSessionVolume() ) )
-          @_volControl.pipe(speaker)
-          audioDecoder.pipe(@_volControl)
-          
-        )
-        
-        fs.createReadStream(resource).pipe(audioDecoder)
-      )
-    
-    getInterval: -> Promise.resolve @config.interval
-    getVolume: -> Promise.resolve @config.volume
-    getRepeat: -> Promise.resolve @config.repeat
-    getLanguage: -> Promise.resolve @config.language
-    getTYpe: -> Promise.resolve @_options.type
-    
-    getCacheDir: -> @config.tmpDir
-    isCacheEnabled: -> @config.enableCache
-    getSessionVolume: -> @_conversionSettings?.speech?.volume?.parsed ? @config.volume
-    getSessionRepeat: -> @_conversionSettings?.speech?.repeat?.number?.parsed ? @config.repeat
-    getSessionInterval: -> @_conversionSettings?.speech?.repeat?.interval?.parsed ? @config.interval
-    getMaxRelativeVolume: -> @_options.volume.maxRel
-    getMaxVolume: -> @_options.volume.max
-    getMinVolume: -> @_options.volume.min
-    getText: -> @_conversionSettings.text.parsed
-    isStatic: -> @_conversionSettings.text.static
-    getResource: -> @_conversionSettings.speech.resource
-    getCache: -> @_conversionSettings.output.cache
-    getAudioDecoder: -> new @_options.audioDecoder()
-    getAudioFormat: -> @_options.audioFormat
-    getOutputDevice: -> @_conversionSettings.output.device ? @
-    
-    _setSessionInterval: (value) ->
-      if value is @_conversionSettings.speech.repeat.interval.parsed then return
-      @_conversionSettings.speech.repeat.interval.parsed = value
-      @emit 'sessionInterval', value
-      
-    _setAudioFormat: (value) ->
-      if value is @_options.audioFormat then return
-      @_options.audioFormat = value
-      @emit 'audioFormat', value
-      
-    _setAudioDecoder: (value) ->
-      if value is @_options.audioDecoder then return
-      @_options.audioDecoder = value
-      @emit 'audioDecoder', value
-      
-    _setResource: (value) ->
-      if value is @_conversionSettings.speech.resource then return
-      @_conversionSettings.speech.resource = value
-      @emit 'resource', value
-    
-    _setCache: (value) ->
-      if value is @_conversionSettings.output.cache then return
-      @_conversionSettings.output.cache = value
-      @emit 'resource', value
-    
-    setVolumeLevel: (volume) ->
-      @_volControl?.setVolume(@_pcmVolume(volume))
-      
-    _setConversionSettings: (settings) ->
-      @_conversionSettings = settings
-      @emit('conversionSettings', settings)
-    
-    _setVolumeWithinRange: (volume) ->
-      if volume < @getMinVolume() then volume = @getMinVolume()
-      if volume > @getMaxVolume() then volume = @getMaxVolume()
-      return volume
-      
-    _pcmVolume: () -> return ( @_setVolumeWithinRange( @getVolume() ) / @getMaxRelativeVolume() * @getMaxVolume() / @getMaxRelativeVolume() ).toPrecision(2)
-    
-    _getHash: (value) ->
-      md5 = Crypto.createHash('md5')
-      return md5.update(value).digest('hex')
-      
-    _getHashedFilename: (text) ->
-      fname = '/pimatic-tts_' + @id + '_' + @_getHash(text) + '.' + @getAudioFormat()
-      return fname
-      
     _removeCache: (fname) =>
       fname ?= @getCache()
       
@@ -346,8 +258,8 @@ module.exports = (env) ->
         fs.open(fname, 'wx', (error, fd) =>
           
           if error?.code is "EEXIST"
-            
             fs.unlink(fname, (error) =>
+              
               if error
                 reject error
               
@@ -355,12 +267,40 @@ module.exports = (env) ->
                 @base.debug __("Deleted file: %s", fname)
                 resolve true
             )
-          reject error if error?
+          else if error?
+            @base.error __("Unable to delete file: %s", fname)
+            reject error
         )
         fs.close(fd) if fd?
         resolve true
       )
     
+    _toMilliSeconds: (time) -> 
+      return time *1000
+    
+    _createHash: (value) ->
+      md5 = Crypto.createHash('md5')
+      return md5.update(value).digest('hex')
+      
+    _createFilename: () -> 
+      return __("%s%s_%s.%s", @_FILE_PREFIX, @id, @_createHash( @getText() ), @getAudioFormat())
+    
+    _setCache: (value) ->
+      if value is @_conversionSettings.output.cache then return
+      @_conversionSettings.output.cache = value
+      @emit 'resource', value
+      
+    _setConversionSettings: (settings) ->
+      @_conversionSettings = settings
+      @emit('conversionSettings', settings)
+      
+    _errMethodNotImplemented: (method) -> 
+      throw new Error __("Method \"%s\" is not implemented!", method)
+    
+    _logError: (error) =>
+      @base.resetLastError()
+      @base.error(error.message) if typeof error is 'object'
+        
     destroy: () ->
       @removeAllListeners('state')
       

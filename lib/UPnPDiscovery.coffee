@@ -18,6 +18,6 @@ module.exports = (env) ->
     destroy: () ->
       super()
       
-    _getDeviceConfig: (headers, xml) => return { xml: headers['LOCATION'] } if headers.ST is @_schema
+    _getXml: (headers, xml) => return headers['LOCATION'] if headers.ST is @_schema
   
   return UPnPDiscovery

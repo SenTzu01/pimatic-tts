@@ -9,7 +9,8 @@ module.exports = (env) ->
     
     constructor: (@framework, @config) ->
       @base = commons.base @, 'tts-ActionProvider'
-      
+      @debug = @config.debug
+
       super()
       
     parseAction: (input, context) =>
@@ -45,10 +46,14 @@ module.exports = (env) ->
             input: null,
             parsed: null
           }
+          format: {
+            type: 'mp3'
+            duration: null
+          }
         }
       }
       
-      devicesWithFunction = (f) =>
+      devicesWithAction = (f) =>
         _(@framework.deviceManager.devices).values().filter( (device) => 
           device.hasAction(f)
         ).value()
@@ -58,25 +63,33 @@ module.exports = (env) ->
         ttsSettings.text.static = !@framework.variableManager.extractVariables(t).length > 0
       
       setSpeechVolume = (m) =>
-        m.match([" with volume "]).matchNumericExpression( (m, v) =>
-          ttsSettings.speech.volume.input = v
-          ttsSettings.output.volume.input = v
-        )
+        m.match([" with volume "])
+          .matchNumericExpression( (m, v) =>
+            ttsSettings.speech.volume.input = v
+            ttsSettings.output.volume.input = v
+          )
       
       setSpeechRepeatNumber = (m) =>
-        m.match([" repeating "]).matchNumericExpression( (m, r) =>
-          ttsSettings.speech.repeat.number.input = r
-        ).match([" times"])
+        m.match([" repeating "])
+          .matchNumericExpression( (m, r) =>
+            ttsSettings.speech.repeat.number.input = r
+          )
+          .match([" times"]
+        )
       
       setSpeechRepeatInterval = (m) =>
-        m.match([" every "]).matchNumericExpression( (m, w) =>
-          ttsSettings.speech.repeat.interval.input = w
-        ).match([" s", " seconds"])
+        m.match([" every "])
+          .matchNumericExpression( (m, w) =>
+            ttsSettings.speech.repeat.interval.input = w
+          )
+          .match([" s", " seconds"]
+        )
       
       setOutputDevice = (m) =>
-        m.match([" via "]).matchDevice(devicesWithFunction("playAudio"), (m, d) =>
-          ttsSettings.output.device = d
-        )
+        m.match([" via "])
+          .matchDevice(devicesWithAction("playAudio"), (m, d) =>
+            ttsSettings.output.device = d
+          )
         
       setDevice = (m, d) =>
         device = d
@@ -88,8 +101,8 @@ module.exports = (env) ->
       m = M(input, context)
         .match(["speak ", "Speak ", "say ", "Say "])
         .matchStringWithVars(setText)
-        .match(" using ")
-        .matchDevice(devicesWithFunction("textToSpeech"), setDevice)
+        .match([" using "])
+        .matchDevice(devicesWithAction("textToSpeech"), setDevice)
         .optional(setOutputDevice)
         .optional(setSpeechVolume)
         .optional(setSpeechRepeatNumber)
@@ -146,12 +159,10 @@ module.exports = (env) ->
               return Promise.resolve result
             )
             .catch( (error) =>
-              @base.resetLastError()
-              return @base.rejectWithErrorString Promise.reject, error, __("There were error(s) executing rule action")
+              return Promise.reject error
             )
       )
       .catch( (error) =>
-        @base.error error
         return Promise.resolve true
       )
     

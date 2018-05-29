@@ -18,6 +18,6 @@ module.exports = (env) ->
     destroy: () ->
       super()
     
-    _getDeviceConfig: (headers, xml) => return { xml } if xml.search('<manufacturer>Google Inc.</manufacturer>') > -1
+    _getXml: (headers, xml) => return xml if xml.search('<manufacturer>Google Inc.</manufacturer>') > -1
   
   return ChromecastDiscovery

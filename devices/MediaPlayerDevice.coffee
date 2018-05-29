@@ -4,17 +4,20 @@ module.exports = (env) ->
   commons = require('pimatic-plugin-commons')(env)
   Promise = env.require 'bluebird'
   t = env.require('decl-api').types
+  util = require('util')
   
   class MediaPlayerDevice extends env.devices.PresenceSensor
     
     constructor: (lastState) ->
-      @_detected = false
+      @base = commons.base @, @name
+      
+      @_seen = false
       @_pauseUpdates = false
       
       @_host = lastState?.host?.value or '0.0.0.0'
       @_xml = lastState?.xml?.value or null
       @_type = lastState?.type?.value or 'N/A'
-      @_state = lastState?.state?.value or false
+      @_state = @_presence = false
       
       @actions = _.cloneDeep @actions
       @attributes = _.cloneDeep @attributes
@@ -44,7 +47,7 @@ module.exports = (env) ->
           resource:
             type: t.string})
       
-      @_listener.on('deviceDiscovered', @updateDevice)
+      @_listener.on('deviceDiscovered', @updateDevice )
       @_listener.on('discoveryStopped', @_onDiscoveryEnd)
       
       super()
@@ -57,17 +60,23 @@ module.exports = (env) ->
     updateDevice: (config) =>
       return unless config.id is @id
       
-      @_detected = true
+      @_seen = true
       
-      if !@_pauseUpdates
-        @base.debug __("Updating network device information")
-        
-        @_setName(config.name)
-        @_setHost(config.address)
-        @_setXML(config.xml)
-        @_setType(config.type)
-        @_setState(true)
-        @_setPresence(true)
+      return if @_pauseUpdates
+      @_debug __("Updating network device information")
+      
+      @_setName(config.name)
+      @_setHost(config.address)
+      @_setXML(config.xml)
+      @_setType(config.type)
+      @_setState(true)
+      @_setPresence(true)
+    
+    _onDiscoveryEnd: () =>
+      if !@_seen
+        @_setState(false)
+        @_setPresence(false)
+      @_seen = false
     
     getType: () -> Promise.resolve(@_type)
     getHost: () -> Promise.resolve(@_host)
@@ -98,10 +107,13 @@ module.exports = (env) ->
       return if state is @_state
       @_state = state
       @emit('state', state)
-      
-    _onDiscoveryEnd: () =>
-      @_setState(false) if !@_detected
-      @_setPresence(false) if !@_detected
-      @_detected = false
+    
+    _disableUpdates: () -> @_pauseUpdates = true
+    _enableUpdates: () -> @_pauseUpdates = false
+    
+    _debug: (msg) =>
+      if typeof msg is 'object'
+        msg = util.inspect( msg, {showHidden: true, depth: null } )
+      env.logger.debug __("[%s] %s", @name, msg) if @debug
       
   return MediaPlayerDevice

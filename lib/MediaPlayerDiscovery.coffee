@@ -6,10 +6,11 @@ module.exports = (env) ->
   commons = require('pimatic-plugin-commons')(env)
   http = require('http')
   SSDP = require('./SSDP')(env)
+  util = require('util')
   
   class MediaPlayerDiscovery extends events.EventEmitter
     
-    _getDeviceConfig: () -> throw new Error( __("function _getDeviceConfig not implemented.") )
+    _getXml: () -> throw new Error( __("function _getXml not implemented.") )
     
     constructor: () ->
       @base = commons.base @, @name
@@ -17,6 +18,7 @@ module.exports = (env) ->
       
       @_listener = null
       
+      @_initDelay = 60*1000
       @_timerStartBrowser = null
       @_timerStopBrowser = null
     
@@ -24,7 +26,7 @@ module.exports = (env) ->
       @stop()
     
     start: () =>
-      @_timerStartBrowser = setTimeout(@_startBrowser, @_browseInterval)
+      @_timerStartBrowser = setTimeout(@_startBrowser, @_initDelay)
       
     stop: () =>
       @base.debug _("Stopping SSDP discovery due to external instruction")
@@ -57,18 +59,20 @@ module.exports = (env) ->
     _onSsdpResponse: (headers, rinfo) =>
       if headers['LOCATION'] and headers['LOCATION'].indexOf('https://') < 0
         
-        @_getXml(headers.LOCATION)
-        .then( (xml) =>
-          config = @_getDeviceConfig(headers, xml)
-          fname = @_getFriendlyName(xml)
+        @_getXmlDoc(headers.LOCATION)
+        .then( (xmlDoc) =>
+          xml = @_getXml(headers, xmlDoc)
+          name = @_getFriendlyName(xmlDoc)
           
-          if config? and fname?
-            config.id =       @_createDeviceId(fname, @_type)
-            config.name =     @_createDeviceName(fname)
-            config.type =     @_type
-            config.address =  rinfo.address
-            
-            @base.debug ( __("Emitting device announcement for %s - %s", config.address, config.id) )
+          if xml? and name?
+            config = {
+              id:       @_createDeviceId(name, @_type)
+              name:     @_createDeviceName(name)
+              type:     @_type
+              address:  rinfo.address
+              xml:      xml
+            }
+            #@base.debug ( __("Emitting device announcement for %s - %s", headers.LOCATION, config.id) )
             
             @emit('deviceDiscovered', config)
         )
@@ -77,7 +81,7 @@ module.exports = (env) ->
       matches = xml.match(/<friendlyName>(.+?)<\/friendlyName>/)
       return matches[1] if matches?
     
-    _getXml: (url) =>
+    _getXmlDoc: (url) =>
       return new Promise( (resolve, reject) =>
       
         request = http.request(url)
@@ -103,14 +107,15 @@ module.exports = (env) ->
         @base.rejectWithErrorString( Promise.reject, error, __("There was an error obtaining the XML document") )
       )
     
-    _safeString: (string, char) => return string.replace(/(^[\W]|[\W]$)/g, '').replace(/[\W]+/g, char)
+    _safeString: (string, char) ->    return string.replace(/(^[\W]|[\W]$)/g, '').replace(/[\W]+/g, char)
     _createDeviceId: (fname, type) -> return __("%s-%s", type, @_safeString( fname, '-').toLowerCase() )
-    _createDeviceName: (fname) -> return __("Media player %s", @_safeString( fname, ' ') )
+    _createDeviceName: (fname) ->     return __("Media player %s", @_safeString( fname, ' ') )
     
     _debug: (msg) ->
-      if typeof msg is 'object'
-        util = require('util')
-        msg = util.inspect( msg, {showHidden: true, depth: null } )
-      env.logger.debug __("[%s] %s", @name, msg) if @debug
+      if @debug
+        if typeof msg is 'object'
+          util = require('util')
+          msg = util.inspect( msg, {showHidden: true, depth: null } )
+        env.logger.debug __("[%s] %s", @name, msg)
   
   return MediaPlayerDiscovery

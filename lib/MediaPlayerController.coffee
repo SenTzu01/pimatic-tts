@@ -1,4 +1,4 @@
-module.exports = (env) ->
+ module.exports = (env) ->
 
   DeviceClient = require('upnp-device-client')
   et = require('elementtree')
@@ -18,10 +18,12 @@ module.exports = (env) ->
     ]
     
     _TRANSPORT_STATES: {
+      STATUS: 'status'
       TRANSITIONING: 'loading'
       PLAYING: 'playing'
       PAUSED_PLAYBACK: 'paused'
       STOPPED: 'stopped'
+      
     }
     
     constructor: (url, @debug = false) ->
@@ -48,7 +50,12 @@ module.exports = (env) ->
       )
     
     destroy: () ->
-      super()
+      @_MEDIA_EVENTS.map( (event) =>
+        @removeAllListeners(event)
+      )
+    
+    getCurrentState: () =>
+    
     
     getSupportedProtocols: (callback) =>
       @callAction('ConnectionManager', 'GetProtocolInfo', {}, (err, result) =>
@@ -91,23 +98,25 @@ module.exports = (env) ->
         options = {}
       
       contentType = options.contentType ? 'video/mpeg'
+      #contentDuration = @_formatTime( options.duration )
+      #contentDuration = parseInt(options.duration)
       protocolInfo = __( "http-get:*:%s:*", contentType )
       
       metadata = options.metadata ? {}
       metadata.url = url
       metadata.protocolInfo = protocolInfo
+      metadata.contentDuration = contentDuration
       
       params = {
         RemoteProtocolInfo: protocolInfo,
+        
         PeerConnectionManager: null,
         PeerConnectionID: -1,
         Direction: 'Input'
       }
-      
-      @callAction('ConnectionManager', 'PrepareForConnection', params, (err, result) =>
-        return callback(err) if err? and err.code != 'ENOACTION'
-        #console.log result
-        #@_debug(result)
+      @_debug __("@callAction('ConnectionManager', 'PrepareForConnection')")
+      @callAction('ConnectionManager', 'PrepareForConnection', params, (error, result) =>
+        return callback(error) if error? and error.code != 'ENOACTION'
         
         # If PrepareForConnection is not implemented, we keep the default (0) InstanceID
         @_instanceId = result.AVTransportID if result?.AVTransportID?
@@ -117,16 +126,8 @@ module.exports = (env) ->
           CurrentURI: url,
           CurrentURIMetaData: @_buildMetadata(metadata)
         }
-        
-        @callAction('AVTransport', 'SetAVTransportURI', params, (err) =>
-          return callback(err) if err?
-          
-          if options.autoplay
-            @play(callback)
-            return
-          
-          callback()
-        )
+        @_debug __("@callAction('AVTransport', 'SetAVTransportURI')")
+        @callAction('AVTransport', 'SetAVTransportURI', params, callback)
       )
       
     play: (callback) =>
@@ -134,8 +135,22 @@ module.exports = (env) ->
         InstanceID: @_instanceId,
         Speed: 1
       }
-      
-      @callAction( 'AVTransport', 'Play', params, callback ? @_noOp )
+      @_debug __("@callAction('AVTransport', 'Play')")
+      @callAction( 'AVTransport', 'Play', params, callback)
+    
+    getMediaInfo: (callback) =>
+      params = {
+        InstanceID: @_instanceId
+      }
+      @_debug __("@callAction('AVTransport', 'GetMediaInfo')")
+      @callAction( 'AVTransport', 'GetMediaInfo', params, callback ? @_noOp )
+    
+    getTransportInfo: (callback) =>
+      params = {
+        InstanceID: @_instanceId
+      }
+      @_debug __("@callAction('AVTransport', 'GetTransportInfo')")
+      @callAction( 'AVTransport', 'GetTransportInfo', params, callback ? @_noOp )
     
     pause: (callback) =>
       params = {
@@ -181,27 +196,20 @@ module.exports = (env) ->
       @callAction( 'RenderingControl', 'SetVolume', params, callback ? @_noOp )
     
     _onstatus: (e) =>
+      # Ignore first state (Full state)
+      return @_receivedState = true if !@_receivedState
+      
       @emit('status', e)
-      
-      @_debug __("Status received: %s", util.inspect(e, {showHidden: true, depth: null }))
-      
-      if !@_receivedState
-        # Ignore first state (Full state)
-        @_receivedState = true
-        return
-      
-      if e.hasOwnProperty('TransportState')
-        @_debug( __("Emitting event: %s", @_TRANSPORT_STATES[e.TransportState]) )
-        @emit( @_TRANSPORT_STATES[e.TransportState] )
+      @emit( @_TRANSPORT_STATES[e.TransportState] )         if e.hasOwnProperty('TransportState')
       @emit( 'speedChanged', Number(e.TransportPlaySpeed) ) if e.hasOwnProperty('TransportPlaySpeed')
     
     _formatTime: (seconds) ->
-      h = Math.floor((seconds - (h * 0)     - (m * 0 )) / 3600)
-      m = Math.floor((seconds - (h * 3600)  - (m * 0 )) / 60)
-      s =            (seconds - (h * 3600)  - (m * 60))
-      
-      pad = (v) -> return if v < 10 then '0' + v else v
-      return [pad(h), pad(m), pad(s)].join(':')
+      h = Math.floor( parseInt(seconds) / 3600 )
+      m = Math.floor( ( parseInt(seconds) - (h * 3600) ) / 60 )
+      s = Math.ceil(  ( parseInt(seconds) - (h * 3600)  - (m * 60) ) )
+      pad = (v) -> return if v < 10 then '0' + v.toString() else v.toString()
+      time = [pad(h), pad(m), pad(s)].join(':')
+      return time
     
     _parseTime: (time) ->
       parts = time.split(':').map(Number)
@@ -238,10 +246,12 @@ module.exports = (env) ->
           creator = et.SubElement(item, 'dc:creator')
           creator.text = metadata.creator
         
-        if metadata.url? and metadata.protocolInfo?
+        if metadata.url? and metadata.protocolInfo? #and metadata.contentDuration?
           res = et.SubElement(item, 'res')
           res.set('protocolInfo', metadata.protocolInfo)
+          res.set('duration', metadata.contentDuration)
           res.text = metadata.url
+          
         
         if metadata.subtitlesUrl?
           captionInfo = et.SubElement(item, 'sec:CaptionInfo')
@@ -270,5 +280,5 @@ module.exports = (env) ->
       if typeof msg is 'object'
         msg = util.inspect( msg, {showHidden: true, depth: null } )
       env.logger.debug __("[MediaPlayerController] %s", msg) if @debug
-    
+  
   return MediaPlayerController

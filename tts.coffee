@@ -6,21 +6,27 @@ module.exports = (env) ->
   os = require('os')
   
   TTSProviders =
-    'Google':
+    Google:
       device: 'GoogleTTSDevice'
       deviceDef: 'tts-device-config-schemas'
       langResource: 'google-tts-api-lang.json'
-    'Pico':
+    Pico:
       device: 'PicoTTSDevice'
       deviceDef: 'tts-device-config-schemas'
       langResource: 'pico-tts-api-lang.json'
       
   OutputProviders =
-    'generic':
-      device: 'UPnP'
+    local:
+      type: 'LocalAudio'
+      device: 'LocalAudioMediaPlayerDevice'
       deviceDef: 'mediaplayer-device-config-schemas'
-    'chromecast':
-      device: 'Chromecast'
+    generic:
+      type: 'UPnP'
+      device: 'UPnPMediaPlayerDevice'
+      deviceDef: 'mediaplayer-device-config-schemas'
+    chromecast:
+      type: 'Chromecast'
+      device: 'ChromecastMediaPlayerDevice'
       deviceDef: 'mediaplayer-device-config-schemas'
   
   class TextToSpeechPlugin extends env.plugins.Plugin
@@ -66,13 +72,22 @@ module.exports = (env) ->
       for own obj of OutputProviders
         do (obj) =>
           OutputProvider = OutputProviders[obj]
+          listener = null
           
-          @base.debug "Starting discovery of #{OutputProvider.device} media player devices"
-          Discovery = require("./lib/" + OutputProvider.device + "Discovery")(env)
-          listener = new Discovery(discoveryInterval, discoveryDuration, @config.address, null, @debug)
-          listeners.push listener
+          unless obj is 'local'
+            @base.debug "Starting discovery of #{OutputProvider.type} media player devices"
+            Discovery = require("./lib/" + OutputProvider.type + "Discovery")(env)
+            listener = new Discovery(discoveryInterval, discoveryDuration, @config.address, null, @debug) #@debug
+            listeners.push listener
+            
+            listener.on('deviceDiscovered', (cfg) =>
+              if @config.enableDiscovery and @_isNewDevice(cfg.id)
+                newDevice = @_createPimaticDevice(cfg)
+                newDevice.updateDevice(cfg)
+            )
+            listener.start()
           
-          className = "#{OutputProvider.device}MediaPlayerDevice"
+          className = "#{OutputProvider.device}"
           @base.debug __("Registering device class: %s", className)
           
           deviceConfig = require("./" + OutputProvider.deviceDef)
@@ -80,16 +95,11 @@ module.exports = (env) ->
           
           params = {
             configDef: deviceConfig[className], 
-            createCallback: (config, lastState) => return new deviceClass(config, lastState, listener, @debug)
+            createCallback: (config, lastState) => return new deviceClass(config, lastState, listener, @debug) #@debug
           }
           @framework.deviceManager.registerDeviceClass(className, params)
           
-          listener.on('deviceDiscovered', (cfg) =>
-            if @config.enableDiscovery and @_isNewDevice(cfg.id)
-              newDevice = @_createPimaticDevice(cfg)
-              newDevice.updateDevice(cfg)
-          )
-          listener.start()
+          
       
       @base.debug "Registering action provider"
       actionProviderClass = require('./actions/TTSActionProvider')(env)
