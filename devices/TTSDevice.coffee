@@ -169,7 +169,7 @@ module.exports = (env) ->
         i++
         return Promise.all(results) if done()
         
-        repeater = @_outputWithDelayedRepeat(device, resource, duration, volume, iterations, interval, i, results)
+        repeater = @_repeatOutput(device, resource, duration, volume, iterations, interval, i, results)
       )
     
     _startMediaServer: (resource) =>

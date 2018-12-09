@@ -9,6 +9,8 @@ module.exports = (env) ->
   fs = require('fs')
   TTSDevice = require("./TTSDevice")(env)
   lame = require('lame')
+  textToSpeech = require('google-tts-api')
+  SSML = require('ssml-builder')
   
   class GoogleTTSDevice extends TTSDevice
     
@@ -51,6 +53,8 @@ module.exports = (env) ->
       return new Promise( (resolve, reject) =>
         return reject new Error( __("%s: A maximum of 200 characters is allowed.", @id, text.length) ) unless text.length < @getMaxStringLength()
         
+        @base.debug __("speed: %s. Calculated speed: %s", @getSpeed(), @getSpeedPercentage() )
+        
         @getLanguage()
         .then( (language) =>
           @base.debug __("@_options.language: %s", language)
@@ -72,6 +76,43 @@ module.exports = (env) ->
             
             resolve file
         )
+        
+        ###
+        @getLanguage()
+        .then( (language) =>
+          @base.debug __("@_options.language: %s", language)
+          
+          client = new textToSpeech.TextToSpeechClient()
+          response = client.synthesizeSpeech({
+            input: { 
+              ssml: text
+            },
+            voice: {
+              languageCode: language, 
+              ssmlGender: 'FEMALE' 
+            },
+            audioConfig: {
+              audioEncoding: 'MP3',
+              speakingRate: @getSpeedPercentage()
+            }
+          })
+          
+          @base.debug(response)
+          return response
+        )
+        .then( (response) =>
+          @base.debug __("response: %s", response)
+          
+          @_createFileFromStream(response.audioContent, file)
+        )
+        .then( (file) =>
+          resolve(file)
+        )
+        .catch( (error) =>
+          reject(error)
+        )
+        ###
+        
       )
     
     _setSpeed: (value) ->

@@ -43,13 +43,14 @@
   ],
   "configSchema": "tts-config-schema.coffee",
   "dependencies": {
-    "google-tts-api": "^0.0.2",
+    "google-tts-api": "^0.0.4",
     "lame": "^1.1.2",
     "mp3-duration": "^1.1.0",
     "pcm-volume": "^1.0.0",
     "pimatic-plugin-commons": "^0.9.5",
     "request": "^2.85.0",
     "speaker": "^0.4.1",
+    "ssml-builder": "^0.4.3",
     "wav": "^1.0.1"
   },
   "optionalDependencies": {},
