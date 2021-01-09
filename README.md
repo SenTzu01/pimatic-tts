@@ -1,3 +1,4 @@
+### Looking for a new maintainer. Please contact me when interested.
 # pimatic-tts
 This plugin provides Text-to-Speech (TTS) functionality to Pimatic
 
